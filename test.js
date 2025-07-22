@@ -32,7 +32,27 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Webhook server running on port ${PORT}`);
 });
+// Webhook sender function
+async function sendToDiscordWebhook(content) {
+  const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
+  if (!webhookUrl) return;
 
+  try {
+    const webhook = new WebhookClient({ url: webhookUrl });
+    await webhook.send({
+      content,
+      username: 'GitHub Bot',
+      avatarURL: 'https://i.imgur.com/AfFp7pu.png'
+    });
+  } catch (err) {
+    console.error('Webhook error:', err);
+  }
+}
+
+// Example usage when code updates
+process.on('exit', () => {
+  sendToDiscordWebhook('🔄 Bot is restarting...');
+});
 // Initialize Discord client with all required intents
 const client = new Client({
   intents: [
@@ -238,3 +258,17 @@ client.on('messageCreate', async message => {
 client.login(process.env.TOKEN)
   .then(() => console.log('🔗 Bot is connecting to Discord...'))
   .catch(err => console.error('❌ Login error:', err));
+name: Deploy to Discord
+on: [push]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Notify Discord
+        uses: Ilshidur/action-discord@master
+        with:
+          args: '🚀 New update pushed to ${{ github.repository }} by ${{ github.actor }}'
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
