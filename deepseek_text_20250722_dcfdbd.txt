@@ -1,0 +1,6 @@
+multilands-bot/
+├── bot.js               (main bot file)
+├── package.json         (dependencies)
+├── .env.example         (template for environment variables)
+├── .gitignore           (ignores .env and node_modules)
+└── README.md            (instructions)
