@@ -1,0 +1,15 @@
+{
+  "name": "multilands-rp-bot",
+  "version": "1.0.0",
+  "description": "Discord RP bot for Multilands",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "discord.js": "^14.12.1",
+    "mongoose": "^7.4.3",
+    "dotenv": "^16.3.1"
+  }
+}
