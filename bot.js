@@ -281,3 +281,5 @@ client.on('ready', () => {
     console.log(`- ${guild.name} (${guild.id})`);
   });
 });
+require('dotenv').config();
+client.login(process.env.DISCORD_TOKEN);
