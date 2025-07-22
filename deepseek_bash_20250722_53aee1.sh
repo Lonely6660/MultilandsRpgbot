@@ -1,2 +1,3 @@
-echo "TOKEN=your_bot_token_here" > .env
+${{ secrets.Token }}
+        run: node bot.js" > .env
 echo "MONGODB_URI=your_mongodb_uri_here" >> .env
