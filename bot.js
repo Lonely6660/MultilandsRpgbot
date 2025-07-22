@@ -275,3 +275,9 @@ jobs:
          Name: https:
 Value: [discord.com/api/webhooks/1397285884612575332/KTdXs4RDnjq4Raw15SXmJLM-VJ8OYT9ySBhDifAhXUS2QgIS_w6H2_QWwHDSxZkG7qSO]
 
+client.on('ready', () => {
+  console.log(`Bot is in ${client.guilds.cache.size} servers:`);
+  client.guilds.cache.forEach(guild => {
+    console.log(`- ${guild.name} (${guild.id})`);
+  });
+});
