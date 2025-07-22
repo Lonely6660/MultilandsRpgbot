@@ -1,2 +1,2 @@
-TOKEN=DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+TOKEN=DISCORD_TOKEN: ${{ secrets.Token }}
 MONGODB_URI=your_mongodb_connection_string
