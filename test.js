@@ -1,3 +1,13 @@
+client.login(process.env.TOKEN)
+  .then(() => {
+    console.log('✅ Login successful');
+    console.log(`🆔 Bot User ID: ${client.user.id}`);
+    console.log(`👥 Guilds: ${client.guilds.cache.size}`);
+  })
+  .catch(err => {
+    console.error('❌ LOGIN FAILED:', err);
+    process.exit(1);
+  });
 require('dotenv').config();
 const { Client, IntentsBitField, EmbedBuilder, WebhookClient } = require('discord.js');
 const mongoose = require('mongoose');
