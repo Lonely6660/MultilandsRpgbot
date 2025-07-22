@@ -1,5 +1,6 @@
-name: Spread.rpg
+name: Multibot
 on: [push]
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -8,5 +9,5 @@ jobs:
       - run: npm install
       - run: node bot.js
         env:
-          TOKEN: ${{ secrets.DISCORD_TOKEN }}
-          MONGODB_URL: ${{MONGODB_URI: ${{ secrets.MongoDbUrl }}
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+          MONGODB_URI: ${{ secrets.MongoDbUrl }}
