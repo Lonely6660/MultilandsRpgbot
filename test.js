@@ -272,3 +272,6 @@ jobs:
           args: '🚀 New update pushed to ${{ github.repository }} by ${{ github.actor }}'
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+         Name: https:
+Value: [discord.com/api/webhooks/1397285884612575332/KTdXs4RDnjq4Raw15SXmJLM-VJ8OYT9ySBhDifAhXUS2QgIS_w6H2_QWwHDSxZkG7qSO]
+
