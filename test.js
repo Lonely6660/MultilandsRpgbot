@@ -11,6 +11,27 @@ client.login(process.env.TOKEN)
 require('dotenv').config();
 const { Client, IntentsBitField, EmbedBuilder, WebhookClient } = require('discord.js');
 const mongoose = require('mongoose');
+const express = require('express');
+const app = express();
+app.use(express.json());
+
+// Webhook verification endpoint
+app.post('/discord-webhook', (req, res) => {
+  // Verify the webhook request
+  if (req.headers['x-discord-verify'] === 'true') {
+    return res.status(200).send('Webhook verified');
+  }
+  
+  // Handle actual webhook events here
+  console.log('Webhook received:', req.body);
+  res.status(200).end();
+});
+
+// Start webhook server
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Webhook server running on port ${PORT}`);
+});
 
 // Initialize Discord client with all required intents
 const client = new Client({
