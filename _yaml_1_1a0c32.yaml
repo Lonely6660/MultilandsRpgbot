@@ -1,4 +1,4 @@
-name: Deploy Bot
+name: Spread.rpg
 on: [push]
 jobs:
   deploy:
