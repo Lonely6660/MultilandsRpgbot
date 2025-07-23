@@ -1,15 +1,16 @@
+
 require('dotenv').config();
-const { Client, IntentsBitField, EmbedBuilder, REST, Routes, SlashCommandBuilder } = require('discord.js');
+const { Client, IntentsBitField, EmbedBuilder, REST, Routes, SlashCommandBuilder, GatewayIntentBits } = require('discord.js');
 const mongoose = require('mongoose');
 
-// Initialize Client
+// Initialize Client with updated Intents
 const client = new Client({
   intents: [
-    IntentsBitField.Flags.Guilds,
-    IntentsBitField.Flags.GuildMessages,
-    IntentsBitField.Flags.MessageContent,
-    IntentsBitField.Flags.GuildMembers,
-    IntentsBitField.Flags.GuildWebhooks
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildWebhooks
   ]
 });
 
@@ -62,6 +63,10 @@ const commands = [
         .setDescription('Character name')
         .setRequired(true))
     .addStringOption(option =>
+        option.setName('avatar_url')
+          .setDescription('A URL for your character\'s avatar.')
+          .setRequired(true))
+    .addStringOption(option =>
       option.setName('strengths')
         .setDescription('3 strengths (comma separated)')
         .setRequired(true))
@@ -102,28 +107,27 @@ const commands = [
 ].map(command => command.toJSON());
 
 // Register Slash Commands
+const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+
 async function registerCommands() {
   try {
-    const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
-    
     console.log('⌛ Registering slash commands...');
     
-    // Global registration
-    await rest.put(
-      Routes.applicationCommands(process.env.CLIENT_ID),
-      { body: commands }
-    );
-
-    // Optional: Test server registration for faster updates
+    // Use guild commands for testing, and global for production
     if (process.env.TEST_GUILD_ID) {
       await rest.put(
         Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.TEST_GUILD_ID),
         { body: commands }
       );
-      console.log('⚡ Commands updated in test server');
+      console.log('⚡ Commands registered in test server');
+    } else {
+      await rest.put(
+        Routes.applicationCommands(process.env.CLIENT_ID),
+        { body: commands }
+      );
+      console.log('✅ Successfully registered global commands');
     }
 
-    console.log(`✅ Successfully registered ${commands.length} commands`);
   } catch (error) {
     console.error('❌ Failed to register commands:', error);
   }
@@ -136,7 +140,7 @@ client.on('ready', async () => {
   
   // Set presence
   client.user.setPresence({
-    activities: [{ name: 'Multilands RP', type: 'PLAYING' }],
+    activities: [{ name: 'Multilands RP', type: 3 }], // Type 3 is 'WATCHING'
     status: 'online'
   });
 });
@@ -147,17 +151,21 @@ client.on('interactionCreate', async interaction => {
 
   if (interaction.commandName === 'profile') {
     const focusedValue = interaction.options.getFocused();
-    const userCharacters = await Character.find({
-      userId: interaction.user.id,
-      name: new RegExp(focusedValue, 'i')
-    }).limit(25);
+    try {
+        const userCharacters = await Character.find({
+            userId: interaction.user.id,
+            name: new RegExp(focusedValue, 'i')
+        }).limit(25);
 
-    await interaction.respond(
-      userCharacters.map(char => ({
-        name: char.name,
-        value: char.name
-      }))
-    );
+        await interaction.respond(
+            userCharacters.map(char => ({
+                name: char.name,
+                value: char.name
+            }))
+        );
+    } catch (error) {
+        console.error('Autocomplete error:', error);
+    }
   }
 });
 
@@ -165,30 +173,32 @@ client.on('interactionCreate', async interaction => {
 client.on('interactionCreate', async interaction => {
   if (!interaction.isCommand()) return;
 
-  const { commandName, options, user } = interaction;
+  const { commandName, options, user, channel } = interaction;
 
   try {
     // Ping Command
     if (commandName === 'ping') {
-      await interaction.reply('🏓 Pong!');
+      await interaction.reply({ content: '🏓 Pong!', ephemeral: true });
     }
 
     // Create Character Command
-    if (commandName === 'createchar') {
-      await interaction.deferReply();
+    else if (commandName === 'createchar') {
+      await interaction.deferReply({ ephemeral: true });
       
       const name = options.getString('name');
+      const avatarURL = options.getString('avatar_url');
       const strengths = options.getString('strengths').split(',').map(s => s.trim());
       const weaknesses = options.getString('weaknesses').split(',').map(w => w.trim());
       const affinity = options.getString('affinity');
 
       if (strengths.length !== 3 || weaknesses.length !== 3) {
-        return interaction.editReply('❌ Please provide exactly 3 strengths and 3 weaknesses');
+        return interaction.editReply('❌ Please provide exactly 3 strengths and 3 weaknesses.');
       }
 
       const newChar = new Character({
         userId: user.id,
         name,
+        avatarURL,
         strengths,
         weaknesses,
         affinity,
@@ -198,63 +208,81 @@ client.on('interactionCreate', async interaction => {
       });
 
       await newChar.save();
-      await interaction.editReply(`✅ Created character **${name}**! Use \`/profile ${name}\` to activate.`);
+      await interaction.editReply(`✅ Created character **${name}**! Use \`/profile\` to set them as your active character.`);
     }
 
     // Profile Command
-    if (commandName === 'profile') {
+    else if (commandName === 'profile') {
+      await interaction.deferReply({ ephemeral: true });
       const charName = options.getString('character');
       const character = await Character.findOne({
         userId: user.id,
-        name: new RegExp(charName, 'i')
+        name: charName
       });
 
       if (!character) {
-        return interaction.reply({ content: '❌ Character not found!', ephemeral: true });
+        return interaction.editReply('❌ Character not found! Make sure you selected a valid character from the list.');
       }
 
-      activeProfiles.set(user.id, character._id);
-      await interaction.reply(`🎭 Active character set to **${character.name}**`);
+      activeProfiles.set(user.id, character.id);
+      await interaction.editReply(`🎭 Active character set to **${character.name}**.`);
     }
 
     // Say Command (In-Character Speech)
-    if (commandName === 'say') {
-      const character = await Character.findById(activeProfiles.get(user.id));
-      if (!character) {
+    else if (commandName === 'say') {
+      const activeCharacterId = activeProfiles.get(user.id);
+      if (!activeCharacterId) {
         return interaction.reply({ 
-          content: '❌ No active character! Use `/profile` first.', 
+          content: '❌ No active character! Use the `/profile` command first.', 
+          ephemeral: true 
+        });
+      }
+
+      const character = await Character.findById(activeCharacterId);
+       if (!character) {
+        // This case handles if a character was deleted but was still set as active.
+        activeProfiles.delete(user.id);
+        return interaction.reply({ 
+          content: '❌ Your active character could not be found. Please set a new one with `/profile`.', 
           ephemeral: true 
         });
       }
 
       const message = options.getString('message');
-      await interaction.deferReply({ ephemeral: true });
-      await interaction.deleteReply();
-
-      // Webhook handling
-      const webhooks = await interaction.channel.fetchWebhooks();
-      let webhook = webhooks.find(w => w.name === character.name);
       
+      // Acknowledge the interaction immediately.
+      await interaction.deferReply({ ephemeral: true });
+      
+      // Webhook handling
+      const webhooks = await channel.fetchWebhooks();
+      let webhook = webhooks.find(w => w.owner.id === client.user.id && w.name === 'RP Webhook');
+
       if (!webhook) {
-        webhook = await interaction.channel.createWebhook({
-          name: character.name,
-          avatar: character.avatarURL
+        webhook = await channel.createWebhook({
+          name: 'RP Webhook',
+          avatar: client.user.displayAvatarURL(),
+          reason: 'Webhook for roleplaying messages'
         });
       }
-
+      
+      // Send the message through the webhook, overriding its name and avatar for this one message.
       await webhook.send({
         content: message,
         username: character.name,
         avatarURL: character.avatarURL
       });
+
+      // Confirm to the user that the message was sent.
+      await interaction.editReply({ content: 'Your in-character message has been sent!' });
     }
 
   } catch (error) {
     console.error(`Error executing ${commandName}:`, error);
-    await interaction.reply({ 
-      content: '❌ An error occurred while executing this command.', 
-      ephemeral: true 
-    });
+    if (interaction.replied || interaction.deferred) {
+        await interaction.followUp({ content: '❌ An error occurred while executing this command.', ephemeral: true });
+    } else {
+        await interaction.reply({ content: '❌ An error occurred while executing this command.', ephemeral: true });
+    }
   }
 });
 
