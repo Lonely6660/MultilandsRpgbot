@@ -1,7 +1,8 @@
 require('dotenv').config();
-const { Client, IntentsBitField, EmbedBuilder, WebhookClient } = require('discord.js');
+const { Client, IntentsBitField, EmbedBuilder, REST, Routes } = require('discord.js');
 const mongoose = require('mongoose');
 
+// Initialize Discord Client
 const client = new Client({
   intents: [
     IntentsBitField.Flags.Guilds,
@@ -12,10 +13,12 @@ const client = new Client({
   ]
 });
 
+// MongoDB Connection
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log('✅ MongoDB Connected'))
   .catch(err => console.error('❌ MongoDB Error:', err));
 
+// Character Schema (unchanged from your original)
 const characterSchema = new mongoose.Schema({
   userId: String,
   name: String,
@@ -39,70 +42,221 @@ const characterSchema = new mongoose.Schema({
     quantity: { type: Number, default: 1 }
   }]
 });
-
 const Character = mongoose.model('Character', characterSchema);
 const activeProfiles = new Map();
 
-client.on('ready', () => {
-  console.log(`✅ ${client.user.tag} is online!`);
-  client.user.setPresence({
-    activities: [{ name: 'Multilands RP', type: 'PLAYING' }],
-    status: 'online'
-  });
-});
-
-client.on('messageCreate', async message => {
-  if (message.author.bot) return;
-
-  if (message.content.startsWith('!createchar')) {
-    const args = message.content.split('|').map(arg => arg.trim());
-    if (args.length < 9) return message.reply('❌ Format: !createchar name|3 strengths|3 weaknesses|affinity|3 attacks');
-    
-    const [_, name, ...strengths] = args;
-    const weaknesses = strengths.splice(3, 3);
-    const affinity = strengths.pop();
-    const attacks = strengths.splice(3).map(name => ({
-      name,
-      type: name.includes('Slash') ? 'Slash' : 
-            name.includes('Pierce') ? 'Pierce' : 
-            name.includes('Blunt') ? 'Blunt' : 'Magic'
-    }));
-
-    const newChar = new Character({
-      userId: message.author.id,
-      name,
-      strengths,
-      weaknesses,
-      affinity,
-      attacks
-    });
-
-    await newChar.save();
-    return message.reply(`✅ Created character "${name}"!`);
+// Slash Command Definitions
+const commands = [
+  {
+    name: 'ping',
+    description: 'Check if bot is alive'
+  },
+  {
+    name: 'createchar',
+    description: 'Create a new RPG character',
+    options: [
+      {
+        name: 'name',
+        type: 3, // STRING
+        description: 'Character name',
+        required: true
+      },
+      {
+        name: 'strengths',
+        type: 3,
+        description: 'Comma-separated strengths (ex: Strong,Fast,Smart)',
+        required: true
+      },
+      {
+        name: 'weaknesses',
+        type: 3,
+        description: 'Comma-separated weaknesses',
+        required: true
+      },
+      {
+        name: 'affinity',
+        type: 3,
+        description: 'Character affinity',
+        required: true,
+        choices: [
+          { name: 'Wrath', value: 'Wrath' },
+          { name: 'Lust', value: 'Lust' },
+          // Add other affinities...
+        ]
+      }
+    ]
+  },
+  {
+    name: 'profile',
+    description: 'Set your active character',
+    options: [
+      {
+        name: 'character',
+        type: 3,
+        description: 'Character name',
+        required: true,
+        autocomplete: true // Will implement below
+      }
+    ]
+  },
+  {
+    name: 'say',
+    description: 'Speak in-character',
+    options: [
+      {
+        name: 'message',
+        type: 3,
+        description: 'What your character says',
+        required: true
+      }
+    ]
   }
+];
 
-  if (message.content.startsWith('"') && activeProfiles.has(message.author.id)) {
-    const character = await Character.findById(activeProfiles.get(message.author.id));
-    if (!character) return;
+// Register Slash Commands
+const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
-    const webhooks = await message.channel.fetchWebhooks();
-    let webhook = webhooks.find(w => w.name === character.name);
-    
-    if (!webhook) {
-      webhook = await message.channel.createWebhook({
-        name: character.name,
-        avatar: character.avatarURL
+async function registerCommands() {
+  try {
+    console.log('🔧 Registering slash commands...');
+    await rest.put(
+      Routes.applicationCommands(process.env.CLIENT_ID),
+      { body: commands }
+    );
+    console.log('✅ Slash commands registered!');
+  } catch (error) {
+    console.error('❌ Failed to register commands:', error);
+  }
+}
+
+// Slash Command Handler
+client.on('interactionCreate', async interaction => {
+  if (!interaction.isCommand()) return;
+
+  const { commandName, options, user } = interaction;
+
+  try {
+    // Ping Command
+    if (commandName === 'ping') {
+      await interaction.reply('🏓 Pong!');
+    }
+
+    // Character Creation
+    if (commandName === 'createchar') {
+      const name = options.getString('name');
+      const strengths = options.getString('strengths').split(',');
+      const weaknesses = options.getString('weaknesses').split(',');
+      const affinity = options.getString('affinity');
+
+      const newChar = new Character({
+        userId: user.id,
+        name,
+        strengths,
+        weaknesses,
+        affinity,
+        attacks: [] // Initialize empty attacks
+      });
+
+      await newChar.save();
+      await interaction.reply({
+        embeds: [
+          new EmbedBuilder()
+            .setTitle('Character Created!')
+            .setDescription(`**${name}** is ready for adventure!`)
+            .addFields(
+              { name: 'Affinity', value: affinity, inline: true },
+              { name: 'Strengths', value: strengths.join(', '), inline: true }
+            )
+            .setColor('#00ff00')
+        ]
       });
     }
 
-    await message.delete().catch(() => {});
-    await webhook.send({
-      content: message.content.slice(1),
-      username: character.name,
-      avatarURL: character.avatarURL
+    // Profile Selection
+    if (commandName === 'profile') {
+      const charName = options.getString('character');
+      const character = await Character.findOne({
+        userId: user.id,
+        name: new RegExp(charName, 'i')
+      });
+
+      if (!character) {
+        return interaction.reply({ content: '❌ Character not found!', ephemeral: true });
+      }
+
+      activeProfiles.set(user.id, character._id);
+      await interaction.reply(`🎭 Active character set to **${character.name}**`);
+    }
+
+    // In-Character Speech
+    if (commandName === 'say') {
+      const character = await Character.findById(activeProfiles.get(user.id));
+      if (!character) {
+        return interaction.reply({ 
+          content: '❌ No active character! Use `/profile` first.', 
+          ephemeral: true 
+        });
+      }
+
+      const message = options.getString('message');
+      const channel = interaction.channel;
+
+      // Delete the original slash command
+      await interaction.deferReply({ ephemeral: true });
+      await interaction.deleteReply();
+
+      // Send as webhook
+      const webhooks = await channel.fetchWebhooks();
+      let webhook = webhooks.find(w => w.name === character.name);
+      
+      if (!webhook) {
+        webhook = await channel.createWebhook({
+          name: character.name,
+          avatar: character.avatarURL
+        });
+      }
+
+      await webhook.send({
+        content: message,
+        username: character.name,
+        avatarURL: character.avatarURL
+      });
+    }
+
+  } catch (error) {
+    console.error('Command Error:', error);
+    await interaction.reply({
+      content: '❌ An error occurred while processing this command.',
+      ephemeral: true
     });
   }
 });
 
-client.login(process.env.TOKEN)
+// Autocomplete for Profile Command
+client.on('interactionCreate', async interaction => {
+  if (!interaction.isAutocomplete()) return;
+
+  if (interaction.commandName === 'profile') {
+    const focusedValue = interaction.options.getFocused();
+    const characters = await Character.find({
+      userId: interaction.user.id,
+      name: new RegExp(focusedValue, 'i')
+    }).limit(25);
+
+    await interaction.respond(
+      characters.map(char => ({
+        name: char.name,
+        value: char.name
+      }))
+    );
+  }
+});
+
+// Bot Startup
+client.on('ready', async () => {
+  console.log(`✅ ${client.user.tag} is online!`);
+  await registerCommands();
+});
+
+client.login(process.env.DISCORD_TOKEN)
   .catch(err => console.error('❌ Login failed:', err));
