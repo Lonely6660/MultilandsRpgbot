@@ -1,0 +1,15 @@
+name: Multibot
+on: [push]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm install
+      - run: node bot.js
+        env:
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+          NEON_POSTGRES_URI: ${{ secrets.NEON_POSTGRES_URI }}
+          TEST_GUILD_ID: ${{ secrets.TEST_GUILD_ID }}
+          CLIENT_ID: ${{ secrets.CLIENT_ID }}
