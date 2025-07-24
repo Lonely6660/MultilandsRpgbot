@@ -10,4 +10,6 @@ jobs:
       - run: node bot.js
         env:
           DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
-          MONGODB_URI: ${{ secrets.MONGODBURL }}
+          NEON_POSTGRES_URI: ${{ secrets.NEON_POSTGRES_URI }}
+          TEST_GUILD_ID: ${{ secrets.TEST_GUILD_ID }}
+          CLIENT_ID: ${{ secrets.CLIENT_ID }}
