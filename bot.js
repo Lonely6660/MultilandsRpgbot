@@ -391,7 +391,7 @@ pgClient.connect()
       }
     ];
 
-    for (const npc of defaultNpts) { // Typo here, should be defaultNpcs. Correcting.
+    for (const npc of defaultNpcs) { // Corrected from defaultNpts
       try {
         await pgClient.query(
           `INSERT INTO npcs (name, description, avatar_url, health_current, health_max, sanity_current, sanity_max, level, base_damage_dice, attack_chain_max, sanity_increase_desc, sanity_decrease_desc, is_boss, rarity)
@@ -1325,7 +1325,7 @@ client.on('interactionCreate', async interaction => {
                     .addFields(
                         { name: 'Your Character', value: `${playerCharacter.name} (HP: ${playerCharacter.health_max}, SP: ${playerCharacter.sanity_max})`, inline: true },
                         { name: 'Opponent', value: `${npcOpponent.name} (HP: ${npcOpponent.health_max}, SP: ${npcOpponent.sanity_max})`, inline: true },
-                        { name: 'Current Turn', value: playerCharacter.name, inline: false }
+                        { name: 'Current Turn', value: currentTurnName, inline: false }
                     )
                     .setThumbnail(playerCharacter.avatar_url || null)
                     .setImage(npcOpponent.avatar_url || null)
