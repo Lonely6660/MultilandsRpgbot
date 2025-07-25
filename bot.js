@@ -9,7 +9,7 @@ console.log('process.env.TEST_GUILD_ID:', process.env.TEST_GUILD_ID ? '***** (va
 console.log('---------------------------------');
 // --- END DEBUGGING LINES ---
 
-const { Client, EmbedBuilder, REST, Routes, SlashCommandBuilder, GatewayIntentBits } = require('discord.js');
+const { Client, EmbedBuilder, REST, Routes, SlashCommandBuilder, GatewayIntentBits, MessageFlags } = require('discord.js'); // Added MessageFlags
 const { Client: PgClient } = require('pg'); // Import the PostgreSQL Client
 
 // Initialize Discord Client with updated Intents
@@ -344,15 +344,15 @@ const commands = [
           option.setName('appearance_url')
             .setDescription('The URL for your character\'s full appearance image.')
             .setRequired(false))
-        .addStringOption(option => // NEW OPTION
+        .addStringOption(option =>
             option.setName('sanity_increase')
             .setDescription('What makes your character\'s sanity increase?')
             .setRequired(false))
-        .addStringOption(option => // NEW OPTION
+        .addStringOption(option =>
             option.setName('sanity_decrease')
             .setDescription('What makes your character\'s sanity decrease?')
             .setRequired(false))
-        .addStringOption(option => // NEW OPTION for player-defined starting attack
+        .addStringOption(option =>
             option.setName('starting_attack')
             .setDescription('The name of your character\'s starting attack (e.g., "Night Weaver\'s Grasp").')
             .setRequired(false)))
@@ -396,7 +396,7 @@ const commands = [
       option.setName('channel')
         .setDescription('The channel to send the message in (defaults to current).')
         .addChannelTypes(0)), // 0 for Text Channels
-  
+
   new SlashCommandBuilder() // New /roll command
     .setName('roll')
     .setDescription('Rolls dice with a specified notation (e.g., 1d4, 2d6+3).')
@@ -485,22 +485,27 @@ client.on('interactionCreate', async interaction => {
         const species = options.getString('species');
         const occupation = options.getString('occupation');
         const appearanceURL = options.getString('appearance_url');
-        const sanityIncrease = options.getString('sanity_increase'); // NEW
-        const sanityDecrease = options.getString('sanity_decrease'); // NEW
-        const startingAttackName = options.getString('starting_attack'); // NEW
+        const sanityIncrease = options.getString('sanity_increase');
+        const sanityDecrease = options.getString('sanity_decrease');
+        const startingAttackName = options.getString('starting_attack');
+
+        // --- Defer the reply immediately to prevent "Unknown interaction" ---
+        await interaction.deferReply({ ephemeral: true });
 
         // Basic URL validation for avatar_url
         try {
             new URL(avatarURL);
         } catch (e) {
-            return interaction.reply({ content: '❌ Invalid URL for avatar. Please provide a valid image URL.', ephemeral: true });
+            // Use editReply as the interaction is already deferred
+            return interaction.editReply({ content: '❌ Invalid URL for avatar. Please provide a valid image URL.' });
         }
         // Basic URL validation for appearance_url if provided
         if (appearanceURL) {
             try {
                 new URL(appearanceURL);
             } catch (e) {
-                return interaction.reply({ content: '❌ Invalid URL for appearance. Please provide a valid image URL.', ephemeral: true });
+                // Use editReply as the interaction is already deferred
+                return interaction.editReply({ content: '❌ Invalid URL for appearance. Please provide a valid image URL.' });
             }
         }
 
@@ -510,7 +515,8 @@ client.on('interactionCreate', async interaction => {
             const checkResult = await pgClient.query(checkQuery, [userId, name]);
 
             if (checkResult.rows.length > 0) {
-              return interaction.reply({ content: `❌ You already have a character named "${name}".`, ephemeral: true });
+              // Use editReply as the interaction is already deferred
+              return interaction.editReply({ content: `❌ You already have a character named "${name}".` });
             }
 
             // Insert new character with all new fields, including sanity descriptions
@@ -518,7 +524,7 @@ client.on('interactionCreate', async interaction => {
               INSERT INTO characters (user_id, name, avatar_url, gender, age, species, occupation, appearance_url, sanity_increase_desc, sanity_decrease_desc)
               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id; -- Return the character ID
             `;
-            const insertResult = await pgClient.query(insertQuery, [userId, name, avatarURL, gender, age, species, occupation, appearanceURL, sanityIncrease, sanityDecrease]); // Added new parameters
+            const insertResult = await pgClient.query(insertQuery, [userId, name, avatarURL, gender, age, species, occupation, appearanceURL, sanityIncrease, sanityDecrease]);
             const newCharacterId = insertResult.rows[0].id;
 
             let finalAttackToAssign = 'Night Weaver\'s Grasp'; // Default fallback attack
@@ -529,7 +535,8 @@ client.on('interactionCreate', async interaction => {
                 if (checkAttackResult.rows.length > 0) {
                     finalAttackToAssign = startingAttackName;
                 } else {
-                    await interaction.followUp({ content: `⚠️ The starting attack "${startingAttackName}" was not found in my database. Using "${finalAttackToAssign}" as your default starting attack.`, ephemeral: true });
+                    // Use followUp here to send an additional message after the initial deferReply
+                    await interaction.followUp({ content: `⚠️ The starting attack "${startingAttackName}" was not found in my database. Using "${finalAttackToAssign}" as your default starting attack.`, flags: MessageFlags.Ephemeral });
                 }
             }
 
@@ -548,17 +555,26 @@ client.on('interactionCreate', async interaction => {
                 console.error(`Initial attack "${finalAttackToAssign}" not found in 'attacks' table. This should not happen if default is 'Night Weaver\'s Grasp'.`);
             }
 
-            await interaction.reply({ content: `✅ Character "${name}" created successfully!` + (startingAttackName && startingAttackName !== finalAttackToAssign ? ` (Used "${finalAttackToAssign}" as starting attack).` : ''), ephemeral: true });
+            // Final reply uses editReply as the interaction is already deferred
+            await interaction.editReply({ content: `✅ Character "${name}" created successfully!` + (startingAttackName && startingAttackName !== finalAttackToAssign ? ` (Used "${finalAttackToAssign}" as starting attack).` : '') });
 
         } catch (dbError) {
             console.error('Error creating character in DB:', dbError);
-            return interaction.reply({ content: '❌ An error occurred while saving your character.', ephemeral: true });
+            // Ensure you use editReply if deferred/replied, otherwise reply
+            if (interaction.deferred || interaction.replied) {
+                return interaction.editReply({ content: '❌ An error occurred while saving your character.' });
+            } else {
+                return interaction.reply({ content: '❌ An error occurred while saving your character.', flags: MessageFlags.Ephemeral });
+            }
         }
 
 
-      } else if (subcommand === 'sheet') { // New 'sheet' subcommand handler
+      } else if (subcommand === 'sheet') { // 'sheet' subcommand handler
         const characterName = options.getString('name');
         let character;
+
+        // Defer reply for sheet command, could be ephemeral or not
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral }); // Made ephemeral for sheet for privacy
 
         try {
           if (characterName) {
@@ -573,7 +589,7 @@ client.on('interactionCreate', async interaction => {
           }
 
           if (!character) {
-            return interaction.reply({ content: `❌ Character "${characterName || 'latest'}" not found. Create one with \`/character create\`.`, ephemeral: true });
+            return interaction.editReply({ content: `❌ Character "${characterName || 'latest'}" not found. Create one with \`/character create\`.` });
           }
 
           // Fetch character's attacks
@@ -599,8 +615,8 @@ client.on('interactionCreate', async interaction => {
               { name: 'CXP', value: character.cxp.toString(), inline: true },
               { name: 'Sanity', value: `${character.sanity_current}/${character.sanity_max}`, inline: true },
               { name: 'Attack Chain Max', value: character.attack_chain_max.toString(), inline: true },
-              { name: 'Sanity Increases With', value: character.sanity_increase_desc || 'N/A', inline: false }, // NEW FIELD
-              { name: 'Sanity Decreases With', value: character.sanity_decrease_desc || 'N/A', inline: false }  // NEW FIELD
+              { name: 'Sanity Increases With', value: character.sanity_increase_desc || 'N/A', inline: false },
+              { name: 'Sanity Decreases With', value: character.sanity_decrease_desc || 'N/A', inline: false }
               // Add more fields as you implement them (Skills, Affinities, Passives, Weaponry, Friendships)
             );
 
@@ -615,54 +631,70 @@ client.on('interactionCreate', async interaction => {
             characterEmbed.addFields({ name: 'Unlocked Attacks', value: 'None yet.', inline: false });
           }
 
-          characterEmbed.setImage(character.appearance_url || null) // Use full appearance image if available
+          characterEmbed.setImage(character.appearance_url || null)
             .setFooter({ text: `Character ID: ${character.id} | User ID: ${character.user_id}` })
             .setTimestamp();
 
-          await interaction.reply({ embeds: [characterEmbed], ephemeral: false }); // ephemeral: false to show to everyone
+          await interaction.editReply({ embeds: [characterEmbed] }); // Use editReply
 
         } catch (dbError) {
           console.error('Error fetching character sheet from DB:', dbError);
-          return interaction.reply({ content: '❌ An error occurred while fetching your character sheet.', ephemeral: true });
+          if (interaction.deferred || interaction.replied) {
+              return interaction.editReply({ content: '❌ An error occurred while fetching your character sheet.' });
+          } else {
+              return interaction.reply({ content: '❌ An error occurred while fetching your character sheet.', flags: MessageFlags.Ephemeral });
+          }
         }
 
       } else if (subcommand === 'list') {
+        // Defer reply for list command
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         try {
             const query = 'SELECT name, avatar_url, level, cxp FROM characters WHERE user_id = $1;';
             const result = await pgClient.query(query, [userId]);
             const characters = result.rows;
 
             if (characters.length === 0) {
-              return interaction.reply({ content: 'You have no characters yet. Create one with `/character create`.', ephemeral: true });
+              return interaction.editReply({ content: 'You have no characters yet. Create one with `/character create`.' });
             }
 
             const characterList = characters.map(char => `- ${char.name} (Lvl ${char.level}, CXP ${char.cxp})`).join('\n');
-            await interaction.reply({ content: `Your characters:\n${characterList}`, ephemeral: true });
+            await interaction.editReply({ content: `Your characters:\n${characterList}` });
 
         } catch (dbError) {
             console.error('Error listing characters from DB:', dbError);
-            return interaction.reply({ content: '❌ An error occurred while fetching your characters.', ephemeral: true });
+            if (interaction.deferred || interaction.replied) {
+                return interaction.editReply({ content: '❌ An error occurred while fetching your characters.' });
+            } else {
+                return interaction.reply({ content: '❌ An error occurred while fetching your characters.', flags: MessageFlags.Ephemeral });
+            }
         }
 
       } else if (subcommand === 'set_default') {
         // Implement default character logic here if needed,
         // e.g., by adding a 'isDefault' field to schema or a separate UserPreferences model.
-        await interaction.reply({ content: 'Default character setting is not yet implemented.', ephemeral: true });
+        await interaction.reply({ content: 'Default character setting is not yet implemented.', flags: MessageFlags.Ephemeral });
 
       } else if (subcommand === 'delete') {
         const name = options.getString('name');
+        // Defer reply immediately
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         try {
             const query = 'DELETE FROM characters WHERE user_id = $1 AND name = $2;';
             const result = await pgClient.query(query, [userId, name]);
 
             if (result.rowCount === 0) {
-              return interaction.reply({ content: `❌ Character "${name}" not found.`, ephemeral: true });
+              return interaction.editReply({ content: `❌ Character "${name}" not found.` });
             }
 
-            await interaction.reply({ content: `✅ Character "${name}" deleted successfully!`, ephemeral: true });
+            await interaction.editReply({ content: `✅ Character "${name}" deleted successfully!` });
         } catch (dbError) {
             console.error('Error deleting character from DB:', dbError);
-            return interaction.reply({ content: '❌ An error occurred while deleting your character.', ephemeral: true });
+            if (interaction.deferred || interaction.replied) {
+                return interaction.editReply({ content: '❌ An error occurred while deleting your character.' });
+            } else {
+                return interaction.reply({ content: '❌ An error occurred while deleting your character.', flags: MessageFlags.Ephemeral });
+            }
         }
       }
 
@@ -676,7 +708,7 @@ client.on('interactionCreate', async interaction => {
         const character = result.rows[0];
 
         if (!character) {
-          return interaction.reply({ content: 'You need to create a character first with `/character create`.', ephemeral: true });
+          return interaction.reply({ content: 'You need to create a character first with `/character create`.', flags: MessageFlags.Ephemeral });
         }
 
         const channel = options.getChannel('channel') || interaction.channel;
@@ -685,14 +717,14 @@ client.on('interactionCreate', async interaction => {
         if (!channel.permissionsFor(client.user).has(['ManageWebhooks', 'SendMessages'])) {
           return interaction.reply({
               content: `❌ I don't have permission to create webhooks or send messages in ${channel.name}.`,
-              ephemeral: true
+              flags: MessageFlags.Ephemeral
           });
         }
 
         const message = options.getString('message');
 
         // Acknowledge the interaction immediately.
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral }); // Defer here
 
         // Webhook handling
         const webhooks = await channel.fetchWebhooks();
@@ -718,33 +750,44 @@ client.on('interactionCreate', async interaction => {
 
       } catch (dbError) {
         console.error('Error during RP command DB lookup or webhook:', dbError);
-        return interaction.reply({ content: '❌ An error occurred during RP command.', ephemeral: true });
+        if (interaction.deferred || interaction.replied) {
+            return interaction.editReply({ content: '❌ An error occurred during RP command.' });
+        } else {
+            return interaction.reply({ content: '❌ An error occurred during RP command.', flags: MessageFlags.Ephemeral });
+        }
       }
-    } else if (commandName === 'roll') { // New /roll command handler
+    } else if (commandName === 'roll') {
       const diceNotation = options.getString('dice');
+      // Defer reply for roll command (not ephemeral as rolls are often public)
+      await interaction.deferReply();
       try {
         const rollResult = rollDice(diceNotation);
-        await interaction.reply({
+        await interaction.editReply({ // Use editReply
           content: `🎲 Rolled ${diceNotation}: [${rollResult.rolls.join(', ')}] Total: **${rollResult.total}**` +
-                   (rollResult.maxRoll ? ' (Perfect Roll!)' : ''),
-          ephemeral: false // Make roll visible to everyone
+                   (rollResult.maxRoll ? ' (Perfect Roll!)' : '')
         });
       } catch (error) {
         console.error('Error handling /roll command:', error);
-        await interaction.reply({ content: `❌ Error rolling dice: ${error.message}`, ephemeral: true });
+        if (interaction.deferred || interaction.replied) {
+            await interaction.editReply({ content: `❌ Error rolling dice: ${error.message}` });
+        } else {
+            await interaction.reply({ content: `❌ Error rolling dice: ${error.message}`, flags: MessageFlags.Ephemeral });
+        }
       }
     }
 
   } catch (error) {
     console.error(`Error executing ${commandName}:`, error);
     if (interaction.replied || interaction.deferred) {
-        await interaction.followUp({ content: '❌ An error occurred while executing this command.', ephemeral: true });
+        // If an initial reply or deferral was already sent, edit it or follow up
+        await interaction.followUp({ content: '❌ An unexpected error occurred while executing this command.', flags: MessageFlags.Ephemeral });
     } else {
-        await interaction.reply({ content: '❌ An error occurred while executing this command.', ephemeral: true });
+        // If no reply or deferral has been sent yet, send a fresh reply
+        await interaction.reply({ content: '❌ An unexpected error occurred while executing this command.', flags: MessageFlags.Ephemeral });
     }
   }
 });
 
 // Login
 client.login(process.env.DISCORD_TOKEN)
-  .catch(err => console.error('❌ Login failed:', err));
+  .catch(err => console.error('❌ Login failed:', err));  
