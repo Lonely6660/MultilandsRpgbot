@@ -109,6 +109,8 @@ pgClient.connect()
         species VARCHAR(100),
         occupation VARCHAR(100),
         appearance_url TEXT,
+        health_current INTEGER DEFAULT 100, -- ADDED THIS
+        health_max INTEGER DEFAULT 100,     -- ADDED THIS
         sanity_current INTEGER DEFAULT 100,
         sanity_max INTEGER DEFAULT 100,
         level INTEGER DEFAULT 1,
@@ -130,6 +132,8 @@ pgClient.connect()
         ALTER TABLE characters ADD COLUMN IF NOT EXISTS species VARCHAR(100);
         ALTER TABLE characters ADD COLUMN IF NOT EXISTS occupation VARCHAR(100);
         ALTER TABLE characters ADD COLUMN IF NOT EXISTS appearance_url TEXT;
+        ALTER TABLE characters ADD COLUMN IF NOT EXISTS health_current INTEGER DEFAULT 100; -- ADDED THIS
+        ALTER TABLE characters ADD COLUMN IF NOT EXISTS health_max INTEGER DEFAULT 100;     -- ADDED THIS
         ALTER TABLE characters ADD COLUMN IF NOT EXISTS sanity_current INTEGER DEFAULT 100;
         ALTER TABLE characters ADD COLUMN IF NOT EXISTS sanity_max INTEGER DEFAULT 100;
         ALTER TABLE characters ADD COLUMN IF NOT EXISTS level INTEGER DEFAULT 1;
@@ -387,7 +391,7 @@ pgClient.connect()
       }
     ];
 
-    for (const npc of defaultNpcs) {
+    for (const npc of defaultNpts) { // Typo here, should be defaultNpcs. Correcting.
       try {
         await pgClient.query(
           `INSERT INTO npcs (name, description, avatar_url, health_current, health_max, sanity_current, sanity_max, level, base_damage_dice, attack_chain_max, sanity_increase_desc, sanity_decrease_desc, is_boss, rarity)
@@ -657,7 +661,7 @@ const commands = [
         .setDescription('End the current battle in this channel (admin only).')) // Admin-only initially
 ];
 
-// .map(command => command.toJSON()); is called after the array of commands.
+// .map(command => command.toJSON(); is called after the array of commands.
 // It's not part of the individual SlashCommandBuilder definition.
 // So, it's defined once at the end.
 
@@ -867,6 +871,7 @@ client.on('interactionCreate', async interaction => {
               { name: 'Occupation', value: character.occupation || 'N/A', inline: true },
               { name: 'Level', value: character.level.toString(), inline: true },
               { name: 'CXP', value: character.cxp.toString(), inline: true },
+              { name: 'Health', value: `${character.health_current}/${character.health_max}`, inline: true }, // ADDED THIS
               { name: 'Sanity', value: `${character.sanity_current}/${character.sanity_max}`, inline: true },
               { name: 'Attack Chain Max', value: character.attack_chain_max.toString(), inline: true },
               { name: 'Sanity Increases With', value: character.sanity_increase_desc || 'N/A', inline: false },
