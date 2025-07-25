@@ -303,7 +303,7 @@ pgClient.connect()
     await pgClient.query(createCharacterAttacksTableQuery);
     console.log('📝 "character_attacks" table ensured.');
 
-    // --- NEW: Ensure 'items' table ---
+    // --- Ensure 'items' table ---
     const createItemsTableQuery = `
       CREATE TABLE IF NOT EXISTS items (
         id SERIAL PRIMARY KEY,
@@ -318,7 +318,7 @@ pgClient.connect()
     await pgClient.query(createItemsTableQuery);
     console.log('📝 "items" table ensured.');
 
-    // --- NEW: Ensure 'character_items' (inventory) table ---
+    // --- Ensure 'character_items' (inventory) table ---
     const createCharacterItemsTableQuery = `
       CREATE TABLE IF NOT EXISTS character_items (
         id SERIAL PRIMARY KEY,
@@ -330,6 +330,108 @@ pgClient.connect()
     `;
     await pgClient.query(createCharacterItemsTableQuery);
     console.log('📝 "character_items" table ensured.');
+
+    // --- NEW: Ensure 'npcs' table ---
+    const createNpcsTableQuery = `
+      CREATE TABLE IF NOT EXISTS npcs (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL UNIQUE,
+        description TEXT,
+        avatar_url TEXT,
+        health_current INTEGER DEFAULT 100,
+        health_max INTEGER DEFAULT 100,
+        sanity_current INTEGER DEFAULT 100,
+        sanity_max INTEGER DEFAULT 100,
+        level INTEGER DEFAULT 1,
+        base_damage_dice VARCHAR(20), -- e.g., '1d6' for basic attacks
+        attack_chain_max INTEGER DEFAULT 1,
+        sanity_increase_desc TEXT,
+        sanity_decrease_desc TEXT,
+        is_boss BOOLEAN DEFAULT FALSE,
+        rarity VARCHAR(50) -- e.g., 'Common', 'Elite', 'Boss'
+      );
+    `;
+    await pgClient.query(createNpcsTableQuery);
+    console.log('📝 "npcs" table ensured.');
+
+    // --- Insert some default NPCs for testing ---
+    const defaultNpcs = [
+      {
+        name: 'Goblin Scavenger',
+        description: 'A small, cunning goblin often found scavenging for scraps. Weak, but can be dangerous in groups.',
+        avatar_url: 'https://i.imgur.com/exampleGoblin.png', // Replace with a real URL
+        health_max: 30, health_current: 30,
+        sanity_max: 20, sanity_current: 20,
+        level: 1, base_damage_dice: '1d4', attack_chain_max: 1,
+        is_boss: false, rarity: 'Common'
+      },
+      {
+        name: 'Forest Spider',
+        description: 'A large, venomous spider lurking in the shadows of the forest.',
+        avatar_url: 'https://i.imgur.com/exampleSpider.png', // Replace with a real URL
+        health_max: 45, health_current: 45,
+        sanity_max: 30, sanity_current: 30,
+        level: 2, base_damage_dice: '1d6', attack_chain_max: 1,
+        effect_description: 'Can inflict minor poison.', // Custom field
+        is_boss: false, rarity: 'Common'
+      },
+      {
+        name: 'Ancient Dragon',
+        description: 'A colossal, ancient dragon whose scales gleam like molten gold. A true test of strength.',
+        avatar_url: 'https://i.imgur.com/exampleDragon.png', // Replace with a real URL
+        health_max: 500, health_current: 500,
+        sanity_max: 300, sanity_current: 300,
+        level: 20, base_damage_dice: '4d12+10', attack_chain_max: 3,
+        sanity_decrease_desc: 'Its mere presence can drive mortals mad.',
+        is_boss: true, rarity: 'Boss'
+      }
+    ];
+
+    for (const npc of defaultNpcs) {
+      try {
+        await pgClient.query(
+          `INSERT INTO npcs (name, description, avatar_url, health_current, health_max, sanity_current, sanity_max, level, base_damage_dice, attack_chain_max, sanity_increase_desc, sanity_decrease_desc, is_boss, rarity)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) ON CONFLICT (name) DO NOTHING;`,
+          [npc.name, npc.description, npc.avatar_url, npc.health_current, npc.health_max, npc.sanity_current, npc.sanity_max, npc.level, npc.base_damage_dice, npc.attack_chain_max, npc.sanity_increase_desc || null, npc.sanity_decrease_desc || null, npc.is_boss, npc.rarity]
+        );
+      } catch (err) {
+        console.error(`Error inserting NPC ${npc.name}:`, err);
+      }
+    }
+    console.log('📝 Default NPCs ensured.');
+
+    // --- NEW: Ensure 'battles' table ---
+    const createBattlesTableQuery = `
+      CREATE TABLE IF NOT EXISTS battles (
+        id SERIAL PRIMARY KEY,
+        guild_id VARCHAR(255) NOT NULL,
+        channel_id VARCHAR(255) NOT NULL,
+        status VARCHAR(50) DEFAULT 'active', -- 'active', 'ended', 'paused'
+        current_turn_participant_id INTEGER, -- Refers to battle_participants.id
+        turn_order JSONB,                   -- Array of { type: 'character'|'npc', battle_participant_id: id }
+        round_number INTEGER DEFAULT 1,
+        created_at TIMESTAMP DEFAULT NOW(),
+        last_activity TIMESTAMP DEFAULT NOW()
+      );
+    `;
+    await pgClient.query(createBattlesTableQuery);
+    console.log('📝 "battles" table ensured.');
+
+    // --- NEW: Ensure 'battle_participants' table ---
+    const createBattleParticipantsTableQuery = `
+      CREATE TABLE IF NOT EXISTS battle_participants (
+        id SERIAL PRIMARY KEY,
+        battle_id INTEGER REFERENCES battles(id) ON DELETE CASCADE,
+        character_id INTEGER REFERENCES characters(id) ON DELETE CASCADE, -- NULL for NPCs
+        npc_id INTEGER REFERENCES npcs(id) ON DELETE CASCADE,             -- NULL for characters
+        current_health INTEGER NOT NULL,
+        current_sanity INTEGER NOT NULL,
+        is_player BOOLEAN NOT NULL,                                       -- True if character, False if NPC
+        UNIQUE(battle_id, character_id, npc_id) -- Ensures unique participant per battle. Handle NULLs for one-or-the-other.
+      );
+    `;
+    await pgClient.query(createBattleParticipantsTableQuery);
+    console.log('📝 "battle_participants" table ensured.');
 
 
   })
@@ -434,7 +536,7 @@ const commands = [
         .setDescription('The dice notation (e.g., 1d4, 2d6+3).')
         .setRequired(true)),
 
-  // --- NEW: /item command for managing item definitions ---
+  // --- /item command for managing item definitions ---
   new SlashCommandBuilder()
     .setName('item')
     .setDescription('Manage game item definitions (admin only).')
@@ -504,7 +606,7 @@ const commands = [
                 { name: 'Misc', value: 'Misc' }
             ))),
 
-  // --- NEW: /inventory command for managing character inventories ---
+  // --- /inventory command for managing character inventories ---
   new SlashCommandBuilder()
     .setName('inventory')
     .setDescription('Manage character inventories and items.')
@@ -531,9 +633,33 @@ const commands = [
         .addIntegerOption(option =>
           option.setName('quantity')
             .setDescription('The quantity of the item to add (default is 1).')
-            .setRequired(false)))
-    // TODO: Add 'remove' and 'use' subcommands in future phases
-].map(command => command.toJSON());
+            .setRequired(false))),
+
+  // --- NEW: /battle command for initiating and managing battles ---
+  new SlashCommandBuilder()
+    .setName('battle')
+    .setDescription('Initiate and manage combat encounters.')
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('start')
+        .setDescription('Start a new battle against an opponent.')
+        .addStringOption(option =>
+          option.setName('opponent_name')
+            .setDescription('The name of the NPC opponent to fight (e.g., "Goblin Scavenger").')
+            .setRequired(true)))
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('status')
+        .setDescription('View the current status of the battle in this channel.'))
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('end')
+        .setDescription('End the current battle in this channel (admin only).')) // Admin-only initially
+];
+
+// .map(command => command.toJSON()); is called after the array of commands.
+// It's not part of the individual SlashCommandBuilder definition.
+// So, it's defined once at the end.
 
 const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
@@ -546,13 +672,13 @@ client.once('ready', async () => {
     if (process.env.TEST_GUILD_ID) {
       await rest.put(
         Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.TEST_GUILD_ID),
-        { body: commands },
+        { body: commands.map(command => command.toJSON()) }, // Correctly map here
       );
       console.log('⚡ Commands registered in test server');
     } else {
       await rest.put(
         Routes.applicationCommands(process.env.CLIENT_ID),
-        { body: commands },
+        { body: commands.map(command => command.toJSON()) }, // Correctly map here
       );
       console.log('⚡ Commands registered globally');
     }
@@ -650,7 +776,7 @@ client.on('interactionCreate', async interaction => {
             // Insert new character with all new fields, including sanity descriptions
             const insertQuery = `
               INSERT INTO characters (user_id, name, avatar_url, gender, age, species, occupation, appearance_url, sanity_increase_desc, sanity_decrease_desc)
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id; -- Return the character ID
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id, sanity_max; -- Return the character ID and max sanity
             `;
             const insertResult = await pgClient.query(insertQuery, [userId, name, avatarURL, gender, age, species, occupation, appearanceURL, sanityIncrease, sanityDecrease]);
             const newCharacterId = insertResult.rows[0].id;
@@ -896,7 +1022,7 @@ client.on('interactionCreate', async interaction => {
       }
     }
 
-    // --- NEW: /item command handler ---
+    // --- /item command handler ---
     else if (commandName === 'item') {
         const subcommand = options.getSubcommand();
         const userId = interaction.user.id; // For potential admin checks later
@@ -1007,7 +1133,7 @@ client.on('interactionCreate', async interaction => {
         }
     }
 
-    // --- NEW: /inventory command handler ---
+    // --- /inventory command handler ---
     else if (commandName === 'inventory') {
         const subcommand = options.getSubcommand();
         const userId = interaction.user.id;
@@ -1024,7 +1150,7 @@ client.on('interactionCreate', async interaction => {
                     const result = await pgClient.query(query, [userId, characterName]);
                     character = result.rows[0];
                 } else {
-                    const query = 'SELECT id, name FROM characters WHERE user_id = $1 ORDER BY id DESC LIMIT 1;';
+                    const query = 'SELECT id, name, avatar_url FROM characters WHERE user_id = $1 ORDER BY id DESC LIMIT 1;'; // Fetch avatar_url
                     const result = await pgClient.query(query, [userId]);
                     character = result.rows[0];
                 }
@@ -1113,6 +1239,185 @@ client.on('interactionCreate', async interaction => {
             } catch (dbError) {
                 console.error('Error adding item to inventory in DB:', dbError);
                 return interaction.editReply({ content: '❌ An error occurred while adding the item to inventory.' });
+            }
+        }
+    }
+
+    // --- NEW: /battle command handler ---
+    else if (commandName === 'battle') {
+        const subcommand = options.getSubcommand();
+        const guildId = interaction.guildId;
+        const channelId = interaction.channelId;
+        const userId = interaction.user.id;
+
+        if (subcommand === 'start') {
+            const opponentName = options.getString('opponent_name');
+            await interaction.deferReply(); // Make visible to all in channel
+
+            try {
+                // 1. Check if a battle is already active in this channel
+                const activeBattleQuery = 'SELECT id FROM battles WHERE guild_id = $1 AND channel_id = $2 AND status = \'active\';';
+                const activeBattleResult = await pgClient.query(activeBattleQuery, [guildId, channelId]);
+                if (activeBattleResult.rows.length > 0) {
+                    return interaction.editReply({ content: '❌ A battle is already active in this channel. Use `/battle status` to check it or `/battle end` to force end it (admin only).' });
+                }
+
+                // 2. Get the user's latest character
+                const charQuery = 'SELECT id, name, health_max, sanity_max, avatar_url FROM characters WHERE user_id = $1 ORDER BY id DESC LIMIT 1;';
+                const charResult = await pgClient.query(charQuery, [userId]);
+                const playerCharacter = charResult.rows[0];
+
+                if (!playerCharacter) {
+                    return interaction.editReply({ content: '❌ You need to create a character first with `/character create` to start a battle.' });
+                }
+
+                // 3. Get the NPC opponent
+                const npcQuery = 'SELECT id, name, health_max, sanity_max, avatar_url FROM npcs WHERE name = $1;';
+                const npcResult = await pgClient.query(npcQuery, [opponentName]);
+                const npcOpponent = npcResult.rows[0];
+
+                if (!npcOpponent) {
+                    return interaction.editReply({ content: `❌ NPC "${opponentName}" not found. Make sure the name is spelled correctly.` });
+                }
+
+                // 4. Create a new battle entry
+                const createBattleQuery = `
+                    INSERT INTO battles (guild_id, channel_id, status)
+                    VALUES ($1, $2, 'active') RETURNING id;
+                `;
+                const battleResult = await pgClient.query(createBattleQuery, [guildId, channelId]);
+                const newBattleId = battleResult.rows[0].id;
+
+                // 5. Add participants to battle_participants table
+                const addPlayerParticipantQuery = `
+                    INSERT INTO battle_participants (battle_id, character_id, current_health, current_sanity, is_player)
+                    VALUES ($1, $2, $3, $4, TRUE) RETURNING id;
+                `;
+                const playerParticipantResult = await pgClient.query(addPlayerParticipantQuery, [newBattleId, playerCharacter.id, playerCharacter.health_max, playerCharacter.sanity_max]);
+                const playerParticipantId = playerParticipantResult.rows[0].id;
+
+                const addNpcParticipantQuery = `
+                    INSERT INTO battle_participants (battle_id, npc_id, current_health, current_sanity, is_player)
+                    VALUES ($1, $2, $3, $4, FALSE) RETURNING id;
+                `;
+                const npcParticipantResult = await pgClient.query(addNpcParticipantQuery, [newBattleId, npcOpponent.id, npcOpponent.health_max, npcOpponent.sanity_max]);
+                const npcParticipantId = npcParticipantResult.rows[0].id;
+
+                // 6. Determine turn order and set current_turn_participant_id (for now, player goes first)
+                const turnOrder = [
+                    { type: 'character', id: playerParticipantId },
+                    { type: 'npc', id: npcParticipantId }
+                ];
+                await pgClient.query(
+                    'UPDATE battles SET turn_order = $1, current_turn_participant_id = $2 WHERE id = $3;',
+                    [JSON.stringify(turnOrder), playerParticipantId, newBattleId]
+                );
+
+                const battleEmbed = new EmbedBuilder()
+                    .setColor(0xFF0000)
+                    .setTitle('⚔️ Battle Started! ⚔️')
+                    .setDescription(`**${playerCharacter.name}** vs. **${npcOpponent.name}**`)
+                    .addFields(
+                        { name: 'Your Character', value: `${playerCharacter.name} (HP: ${playerCharacter.health_max}, SP: ${playerCharacter.sanity_max})`, inline: true },
+                        { name: 'Opponent', value: `${npcOpponent.name} (HP: ${npcOpponent.health_max}, SP: ${npcOpponent.sanity_max})`, inline: true },
+                        { name: 'Current Turn', value: playerCharacter.name, inline: false }
+                    )
+                    .setThumbnail(playerCharacter.avatar_url || null)
+                    .setImage(npcOpponent.avatar_url || null)
+                    .setFooter({ text: `Battle ID: ${newBattleId}` })
+                    .setTimestamp();
+
+                await interaction.editReply({ embeds: [battleEmbed] });
+
+            } catch (dbError) {
+                console.error('Error starting battle in DB:', dbError);
+                return interaction.editReply({ content: '❌ An error occurred while trying to start the battle.' });
+            }
+        } else if (subcommand === 'status') {
+            await interaction.deferReply(); // Visible to all
+
+            try {
+                const battleQuery = `
+                    SELECT
+                        b.id AS battle_id, b.status, b.round_number, b.turn_order, b.current_turn_participant_id,
+                        bp.id AS participant_id, bp.is_player, bp.current_health, bp.current_sanity,
+                        COALESCE(c.name, n.name) AS participant_name,
+                        COALESCE(c.avatar_url, n.avatar_url) AS participant_avatar_url,
+                        COALESCE(c.health_max, n.health_max) AS max_health,
+                        COALESCE(c.sanity_max, n.sanity_max) AS max_sanity
+                    FROM battles b
+                    JOIN battle_participants bp ON b.id = bp.battle_id
+                    LEFT JOIN characters c ON bp.character_id = c.id
+                    LEFT JOIN npcs n ON bp.npc_id = n.id
+                    WHERE b.guild_id = $1 AND b.channel_id = $2 AND b.status = 'active'
+                    ORDER BY bp.is_player DESC, participant_name; -- Players first, then NPCs
+                `;
+                const battleResult = await pgClient.query(battleQuery, [guildId, channelId]);
+
+                if (battleResult.rows.length === 0) {
+                    return interaction.editReply({ content: 'No active battle found in this channel. Use `/battle start` to begin one!' });
+                }
+
+                const battle = battleResult.rows[0]; // First row has battle details
+                const participants = battleResult.rows;
+
+                let playerStatus = '';
+                let npcStatus = '';
+                let currentTurnName = 'Unknown';
+                let currentTurnAvatar = null;
+
+                for (const p of participants) {
+                    const statusLine = `**${p.participant_name}** (HP: ${p.current_health}/${p.max_health}, SP: ${p.current_sanity}/${p.max_sanity})`;
+                    if (p.is_player) {
+                        playerStatus += statusLine + '\n';
+                    } else {
+                        npcStatus += statusLine + '\n';
+                    }
+
+                    if (p.participant_id === battle.current_turn_participant_id) {
+                        currentTurnName = p.participant_name;
+                        currentTurnAvatar = p.participant_avatar_url;
+                    }
+                }
+
+                const statusEmbed = new EmbedBuilder()
+                    .setColor(0x00FFFF)
+                    .setTitle('Current Battle Status 📊')
+                    .setDescription(`**Round ${battle.round_number}**`)
+                    .addFields(
+                        { name: 'Current Turn', value: currentTurnName, inline: false },
+                        { name: 'Your Character(s)', value: playerStatus || 'None', inline: true },
+                        { name: 'Opponent(s)', value: npcStatus || 'None', inline: true }
+                    )
+                    .setThumbnail(currentTurnAvatar || null)
+                    .setFooter({ text: `Battle ID: ${battle.battle_id}` })
+                    .setTimestamp();
+
+                await interaction.editReply({ embeds: [statusEmbed] });
+
+            } catch (dbError) {
+                console.error('Error fetching battle status from DB:', dbError);
+                return interaction.editReply({ content: '❌ An error occurred while fetching battle status.' });
+            }
+        } else if (subcommand === 'end') {
+            // TODO: Implement admin check
+            // if (userId !== 'YOUR_DISCORD_USER_ID') {
+            //     return interaction.reply({ content: 'You do not have permission to end battles.', flags: MessageFlags.Ephemeral });
+            // }
+            await interaction.deferReply();
+
+            try {
+                const query = 'UPDATE battles SET status = \'ended\' WHERE guild_id = $1 AND channel_id = $2 AND status = \'active\' RETURNING id;';
+                const result = await pgClient.query(query, [guildId, channelId]);
+
+                if (result.rowCount === 0) {
+                    return interaction.editReply({ content: '❌ No active battle found in this channel to end.' });
+                }
+
+                await interaction.editReply({ content: '✅ Battle successfully ended!' });
+            } catch (dbError) {
+                console.error('Error ending battle in DB:', dbError);
+                return interaction.editReply({ content: '❌ An error occurred while trying to end the battle.' });
             }
         }
     }
