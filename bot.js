@@ -114,6 +114,8 @@ pgClient.connect()
         level INTEGER DEFAULT 1,
         cxp INTEGER DEFAULT 0,
         attack_chain_max INTEGER DEFAULT 1,
+        sanity_increase_desc TEXT,    -- NEW COLUMN
+        sanity_decrease_desc TEXT,    -- NEW COLUMN
         UNIQUE(user_id, name)
       );
     `;
@@ -133,6 +135,8 @@ pgClient.connect()
         ALTER TABLE characters ADD COLUMN IF NOT EXISTS level INTEGER DEFAULT 1;
         ALTER TABLE characters ADD COLUMN IF NOT EXISTS cxp INTEGER DEFAULT 0;
         ALTER TABLE characters ADD COLUMN IF NOT EXISTS attack_chain_max INTEGER DEFAULT 1;
+        ALTER TABLE characters ADD COLUMN IF NOT EXISTS sanity_increase_desc TEXT; -- NEW COLUMN ENSURE
+        ALTER TABLE characters ADD COLUMN IF NOT EXISTS sanity_decrease_desc TEXT; -- NEW COLUMN ENSURE
       END $$;
     `).catch(err => {
         // Log errors but don't crash if columns already exist
@@ -339,6 +343,18 @@ const commands = [
         .addStringOption(option =>
           option.setName('appearance_url')
             .setDescription('The URL for your character\'s full appearance image.')
+            .setRequired(false))
+        .addStringOption(option => // NEW OPTION
+            option.setName('sanity_increase')
+            .setDescription('What makes your character\'s sanity increase?')
+            .setRequired(false))
+        .addStringOption(option => // NEW OPTION
+            option.setName('sanity_decrease')
+            .setDescription('What makes your character\'s sanity decrease?')
+            .setRequired(false))
+        .addStringOption(option => // NEW OPTION for player-defined starting attack
+            option.setName('starting_attack')
+            .setDescription('The name of your character\'s starting attack (e.g., "Night Weaver\'s Grasp").')
             .setRequired(false)))
     .addSubcommand(subcommand =>
       subcommand
@@ -440,7 +456,15 @@ client.on('error', err => {
 client.on('shardError', err => {
     console.error('❌ Discord.js Shard Error:', err);
 });
-// --- END GLOBAL ERROR HANDLERS ---
+
+// --- DEDICATED POSTGRESQL CLIENT ERROR HANDLER ---
+pgClient.on('error', err => {
+    console.error('❌ PostgreSQL Client Error (Caught by Listener):', err);
+    // This is crucial. When the pg client emits an error, it often means the connection is bad.
+    // You might want to implement a reconnection strategy here.
+    // For now, logging it will help identify the cause without crashing the process immediately.
+});
+// --- END DEDICATED POSTGRESQL CLIENT ERROR HANDLER ---
 
 
 client.on('interactionCreate', async interaction => {
@@ -461,6 +485,9 @@ client.on('interactionCreate', async interaction => {
         const species = options.getString('species');
         const occupation = options.getString('occupation');
         const appearanceURL = options.getString('appearance_url');
+        const sanityIncrease = options.getString('sanity_increase'); // NEW
+        const sanityDecrease = options.getString('sanity_decrease'); // NEW
+        const startingAttackName = options.getString('starting_attack'); // NEW
 
         // Basic URL validation for avatar_url
         try {
@@ -477,7 +504,6 @@ client.on('interactionCreate', async interaction => {
             }
         }
 
-
         try {
             // Check if character already exists for this user
             const checkQuery = 'SELECT * FROM characters WHERE user_id = $1 AND name = $2;';
@@ -487,18 +513,28 @@ client.on('interactionCreate', async interaction => {
               return interaction.reply({ content: `❌ You already have a character named "${name}".`, ephemeral: true });
             }
 
-            // Insert new character with all new fields
+            // Insert new character with all new fields, including sanity descriptions
             const insertQuery = `
-              INSERT INTO characters (user_id, name, avatar_url, gender, age, species, occupation, appearance_url)
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id; -- Return the character ID
+              INSERT INTO characters (user_id, name, avatar_url, gender, age, species, occupation, appearance_url, sanity_increase_desc, sanity_decrease_desc)
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id; -- Return the character ID
             `;
-            const insertResult = await pgClient.query(insertQuery, [userId, name, avatarURL, gender, age, species, occupation, appearanceURL]);
+            const insertResult = await pgClient.query(insertQuery, [userId, name, avatarURL, gender, age, species, occupation, appearanceURL, sanityIncrease, sanityDecrease]); // Added new parameters
             const newCharacterId = insertResult.rows[0].id;
 
-            // Assign initial attacks to the new character
-            const initialAttackName = 'Night Weaver\'s Grasp'; // Your starting attack
+            let finalAttackToAssign = 'Night Weaver\'s Grasp'; // Default fallback attack
+            if (startingAttackName) {
+                // Validate if the chosen starting attack exists in the 'attacks' table
+                const checkAttackQuery = 'SELECT id FROM attacks WHERE name = $1;';
+                const checkAttackResult = await pgClient.query(checkAttackQuery, [startingAttackName]);
+                if (checkAttackResult.rows.length > 0) {
+                    finalAttackToAssign = startingAttackName;
+                } else {
+                    await interaction.followUp({ content: `⚠️ The starting attack "${startingAttackName}" was not found in my database. Using "${finalAttackToAssign}" as your default starting attack.`, ephemeral: true });
+                }
+            }
+
             const getInitialAttackIdQuery = 'SELECT id FROM attacks WHERE name = $1;';
-            const initialAttackResult = await pgClient.query(getInitialAttackIdQuery, [initialAttackName]);
+            const initialAttackResult = await pgClient.query(getInitialAttackIdQuery, [finalAttackToAssign]);
 
             if (initialAttackResult.rows.length > 0) {
                 const initialAttackId = initialAttackResult.rows[0].id;
@@ -507,13 +543,12 @@ client.on('interactionCreate', async interaction => {
                     VALUES ($1, $2, TRUE, 0, 0); -- Start unlocked, level 0, 0 perfect hits
                 `;
                 await pgClient.query(assignAttackQuery, [newCharacterId, initialAttackId]);
-                console.log(`Assigned ${initialAttackName} to new character ${name}.`);
+                console.log(`Assigned ${finalAttackToAssign} to new character ${name}.`);
             } else {
-                console.error(`Initial attack "${initialAttackName}" not found in 'attacks' table.`);
+                console.error(`Initial attack "${finalAttackToAssign}" not found in 'attacks' table. This should not happen if default is 'Night Weaver\'s Grasp'.`);
             }
 
-
-            await interaction.reply({ content: `✅ Character "${name}" created successfully!`, ephemeral: true });
+            await interaction.reply({ content: `✅ Character "${name}" created successfully!` + (startingAttackName && startingAttackName !== finalAttackToAssign ? ` (Used "${finalAttackToAssign}" as starting attack).` : ''), ephemeral: true });
 
         } catch (dbError) {
             console.error('Error creating character in DB:', dbError);
@@ -564,6 +599,8 @@ client.on('interactionCreate', async interaction => {
               { name: 'CXP', value: character.cxp.toString(), inline: true },
               { name: 'Sanity', value: `${character.sanity_current}/${character.sanity_max}`, inline: true },
               { name: 'Attack Chain Max', value: character.attack_chain_max.toString(), inline: true },
+              { name: 'Sanity Increases With', value: character.sanity_increase_desc || 'N/A', inline: false }, // NEW FIELD
+              { name: 'Sanity Decreases With', value: character.sanity_decrease_desc || 'N/A', inline: false }  // NEW FIELD
               // Add more fields as you implement them (Skills, Affinities, Passives, Weaponry, Friendships)
             );
 
