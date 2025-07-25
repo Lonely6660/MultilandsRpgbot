@@ -361,15 +361,6 @@ pgClient.connect()
     // --- Insert some default NPCs for testing ---
     const defaultNpcs = [
       {
-        name: 'Wingslompson'
-        description: ' weldsnacklson brother.',
-        avatar_url: 'https://i1.sndcdn.com/avatars-yn0pmnXMEKlydCTD-FNQaIQ-t500x500.jpg', 
-        health_max: 30, health_current: 30,
-        sanity_max: 20, sanity_current: 20,
-        level: 1, base_damage_dice: '1d4', attack_chain_max: 1,
-        is_boss: false, rarity: 'Common'
-      },
-      {
         name: 'Water Bottle',
         description: 'A water bottle🥀',
         avatar_url: 'https://i.imgur.com/exampleSpider.png', // Replace with a real URL
@@ -389,6 +380,16 @@ pgClient.connect()
         sanity_decrease_desc: 'about_blank.',
         is_boss: true, rarity: 'Boss'
       }
+        {
+        name: 'Wingslompson',
+        description: 'eldsnackldson brother',
+        avatar_url: 'https://i.imgur.com/exampleSpider.png', // Replace with a real URL
+        health_max: 45, health_current: 45,
+        sanity_max: 30, sanity_current: 30,
+        level: 2, base_damage_dice: '1d6', attack_chain_max: 1,
+        effect_description: 'Hydration.', // Custom field
+        is_boss: false, rarity: 'Common'
+      },
     ];
 
     for (const npc of defaultNpcs) { // Corrected from defaultNpts
