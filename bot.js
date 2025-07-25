@@ -9,7 +9,7 @@ console.log('process.env.TEST_GUILD_ID:', process.env.TEST_GUILD_ID ? '***** (va
 console.log('---------------------------------');
 // --- END DEBUGGING LINES ---
 
-const { Client, EmbedBuilder, REST, Routes, SlashCommandBuilder, GatewayIntentBits, MessageFlags } = require('discord.js'); // Added MessageFlags
+const { Client, EmbedBuilder, REST, Routes, SlashCommandBuilder, GatewayIntentBits, MessageFlags } = require('discord.js');
 const { Client: PgClient } = require('pg'); // Import the PostgreSQL Client
 
 // Initialize Discord Client with updated Intents
@@ -114,8 +114,8 @@ pgClient.connect()
         level INTEGER DEFAULT 1,
         cxp INTEGER DEFAULT 0,
         attack_chain_max INTEGER DEFAULT 1,
-        sanity_increase_desc TEXT,    -- NEW COLUMN
-        sanity_decrease_desc TEXT,    -- NEW COLUMN
+        sanity_increase_desc TEXT,
+        sanity_decrease_desc TEXT,
         UNIQUE(user_id, name)
       );
     `;
@@ -135,8 +135,8 @@ pgClient.connect()
         ALTER TABLE characters ADD COLUMN IF NOT EXISTS level INTEGER DEFAULT 1;
         ALTER TABLE characters ADD COLUMN IF NOT EXISTS cxp INTEGER DEFAULT 0;
         ALTER TABLE characters ADD COLUMN IF NOT EXISTS attack_chain_max INTEGER DEFAULT 1;
-        ALTER TABLE characters ADD COLUMN IF NOT EXISTS sanity_increase_desc TEXT; -- NEW COLUMN ENSURE
-        ALTER TABLE characters ADD COLUMN IF NOT EXISTS sanity_decrease_desc TEXT; -- NEW COLUMN ENSURE
+        ALTER TABLE characters ADD COLUMN IF NOT EXISTS sanity_increase_desc TEXT;
+        ALTER TABLE characters ADD COLUMN IF NOT EXISTS sanity_decrease_desc TEXT;
       END $$;
     `).catch(err => {
         // Log errors but don't crash if columns already exist
@@ -303,6 +303,35 @@ pgClient.connect()
     await pgClient.query(createCharacterAttacksTableQuery);
     console.log('📝 "character_attacks" table ensured.');
 
+    // --- NEW: Ensure 'items' table ---
+    const createItemsTableQuery = `
+      CREATE TABLE IF NOT EXISTS items (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL UNIQUE,
+        description TEXT,
+        item_type VARCHAR(50),      -- e.g., 'Consumable', 'Weapon', 'Armor', 'Quest Item'
+        rarity VARCHAR(50),         -- e.g., 'Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'
+        effect_description TEXT,    -- What does it do when used/equipped?
+        effect_data JSONB           -- For structured effects (e.g., { "health_restore": 20, "sanity_restore": 10 })
+      );
+    `;
+    await pgClient.query(createItemsTableQuery);
+    console.log('📝 "items" table ensured.');
+
+    // --- NEW: Ensure 'character_items' (inventory) table ---
+    const createCharacterItemsTableQuery = `
+      CREATE TABLE IF NOT EXISTS character_items (
+        id SERIAL PRIMARY KEY,
+        character_id INTEGER REFERENCES characters(id) ON DELETE CASCADE,
+        item_id INTEGER REFERENCES items(id) ON DELETE CASCADE,
+        quantity INTEGER DEFAULT 1 CHECK (quantity >= 0),
+        UNIQUE(character_id, item_id)
+      );
+    `;
+    await pgClient.query(createCharacterItemsTableQuery);
+    console.log('📝 "character_items" table ensured.');
+
+
   })
   .catch(err => console.error('❌ PostgreSQL Connection Error:', err));
 
@@ -397,7 +426,7 @@ const commands = [
         .setDescription('The channel to send the message in (defaults to current).')
         .addChannelTypes(0)), // 0 for Text Channels
 
-  new SlashCommandBuilder() // New /roll command
+  new SlashCommandBuilder()
     .setName('roll')
     .setDescription('Rolls dice with a specified notation (e.g., 1d4, 2d6+3).')
     .addStringOption(option =>
@@ -405,6 +434,105 @@ const commands = [
         .setDescription('The dice notation (e.g., 1d4, 2d6+3).')
         .setRequired(true)),
 
+  // --- NEW: /item command for managing item definitions ---
+  new SlashCommandBuilder()
+    .setName('item')
+    .setDescription('Manage game item definitions (admin only).')
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('create')
+        .setDescription('Define a new item type.')
+        .addStringOption(option =>
+          option.setName('name')
+            .setDescription('The name of the item.')
+            .setRequired(true))
+        .addStringOption(option =>
+          option.setName('description')
+            .setDescription('A brief description of the item.')
+            .setRequired(true))
+        .addStringOption(option =>
+          option.setName('type')
+            .setDescription('The type of item (e.g., Consumable, Weapon, Armor, Quest Item).')
+            .setRequired(true)
+            .addChoices(
+                { name: 'Consumable', value: 'Consumable' },
+                { name: 'Weapon', value: 'Weapon' },
+                { name: 'Armor', value: 'Armor' },
+                { name: 'Quest Item', value: 'Quest Item' },
+                { name: 'Misc', value: 'Misc' }
+            ))
+        .addStringOption(option =>
+          option.setName('rarity')
+            .setDescription('The rarity of the item (e.g., Common, Rare, Legendary).')
+            .setRequired(true)
+            .addChoices(
+                { name: 'Common', value: 'Common' },
+                { name: 'Uncommon', value: 'Uncommon' },
+                { name: 'Rare', value: 'Rare' },
+                { name: 'Epic', value: 'Epic' },
+                { name: 'Legendary', value: 'Legendary' }
+            ))
+        .addStringOption(option =>
+          option.setName('effect_description')
+            .setDescription('What the item does (e.g., "Restores 20 HP").')
+            .setRequired(false))
+        .addStringOption(option =>
+          option.setName('effect_data')
+            .setDescription('JSON data for item effects (e.g., {"hp_restore":20, "sanity_restore":10}).')
+            .setRequired(false)))
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('view')
+        .setDescription('View details of an item type.')
+        .addStringOption(option =>
+          option.setName('name')
+            .setDescription('The name of the item to view.')
+            .setRequired(true)))
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('list')
+        .setDescription('List all defined item types.')
+        .addStringOption(option =>
+          option.setName('type')
+            .setDescription('Filter by item type (e.g., Consumable, Weapon).')
+            .setRequired(false)
+            .addChoices(
+                { name: 'Consumable', value: 'Consumable' },
+                { name: 'Weapon', value: 'Weapon' },
+                { name: 'Armor', value: 'Armor' },
+                { name: 'Quest Item', value: 'Quest Item' },
+                { name: 'Misc', value: 'Misc' }
+            ))),
+
+  // --- NEW: /inventory command for managing character inventories ---
+  new SlashCommandBuilder()
+    .setName('inventory')
+    .setDescription('Manage character inventories and items.')
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('view')
+        .setDescription('View a character\'s inventory.')
+        .addStringOption(option =>
+          option.setName('character_name')
+            .setDescription('The name of the character whose inventory to view (defaults to your latest).')
+            .setRequired(false)))
+    .addSubcommand(subcommand => // Admin-only for now
+      subcommand
+        .setName('add')
+        .setDescription('Add an item to a character\'s inventory (admin only).')
+        .addStringOption(option =>
+          option.setName('character_name')
+            .setDescription('The name of the character to add the item to.')
+            .setRequired(true))
+        .addStringOption(option =>
+          option.setName('item_name')
+            .setDescription('The name of the item to add.')
+            .setRequired(true))
+        .addIntegerOption(option =>
+          option.setName('quantity')
+            .setDescription('The quantity of the item to add (default is 1).')
+            .setRequired(false)))
+    // TODO: Add 'remove' and 'use' subcommands in future phases
 ].map(command => command.toJSON());
 
 const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
@@ -490,7 +618,7 @@ client.on('interactionCreate', async interaction => {
         const startingAttackName = options.getString('starting_attack');
 
         // --- Defer the reply immediately to prevent "Unknown interaction" ---
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         // Basic URL validation for avatar_url
         try {
@@ -700,10 +828,8 @@ client.on('interactionCreate', async interaction => {
 
     } else if (commandName === 'rp') {
       const userId = interaction.user.id;
-      // For now, assume a default character if no 'set_default' implemented,
-      // or prompt user to create/select one.
       try {
-        const query = 'SELECT name, avatar_url FROM characters WHERE user_id = $1 LIMIT 1;'; // Just pick one for now
+        const query = 'SELECT name, avatar_url FROM characters WHERE user_id = $1 LIMIT 1;';
         const result = await pgClient.query(query, [userId]);
         const character = result.rows[0];
 
@@ -713,7 +839,6 @@ client.on('interactionCreate', async interaction => {
 
         const channel = options.getChannel('channel') || interaction.channel;
 
-        // Ensure the bot has permissions to create webhooks and send messages in the target channel
         if (!channel.permissionsFor(client.user).has(['ManageWebhooks', 'SendMessages'])) {
           return interaction.reply({
               content: `❌ I don't have permission to create webhooks or send messages in ${channel.name}.`,
@@ -723,10 +848,8 @@ client.on('interactionCreate', async interaction => {
 
         const message = options.getString('message');
 
-        // Acknowledge the interaction immediately.
-        await interaction.deferReply({ flags: MessageFlags.Ephemeral }); // Defer here
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-        // Webhook handling
         const webhooks = await channel.fetchWebhooks();
         let webhook = webhooks.find(w => w.owner.id === client.user.id && w.name === 'RP Webhook');
 
@@ -738,14 +861,12 @@ client.on('interactionCreate', async interaction => {
           });
         }
 
-        // Send the message through the webhook, overriding its name and avatar for this one message.
         await webhook.send({
           content: message,
           username: character.name,
-          avatarURL: character.avatar_url // Use avatar_url from DB query
+          avatarURL: character.avatar_url
         });
 
-        // Confirm to the user that the message was sent.
         await interaction.editReply({ content: 'Your in-character message has been sent!' });
 
       } catch (dbError) {
@@ -758,11 +879,10 @@ client.on('interactionCreate', async interaction => {
       }
     } else if (commandName === 'roll') {
       const diceNotation = options.getString('dice');
-      // Defer reply for roll command (not ephemeral as rolls are often public)
-      await interaction.deferReply();
+      await interaction.deferReply(); // Not ephemeral as rolls are often public
       try {
         const rollResult = rollDice(diceNotation);
-        await interaction.editReply({ // Use editReply
+        await interaction.editReply({
           content: `🎲 Rolled ${diceNotation}: [${rollResult.rolls.join(', ')}] Total: **${rollResult.total}**` +
                    (rollResult.maxRoll ? ' (Perfect Roll!)' : '')
         });
@@ -776,13 +896,232 @@ client.on('interactionCreate', async interaction => {
       }
     }
 
+    // --- NEW: /item command handler ---
+    else if (commandName === 'item') {
+        const subcommand = options.getSubcommand();
+        const userId = interaction.user.id; // For potential admin checks later
+
+        if (subcommand === 'create') {
+            // TODO: Implement admin check here if desired
+            // if (userId !== 'YOUR_DISCORD_USER_ID') {
+            //     return interaction.reply({ content: 'You do not have permission to create items.', flags: MessageFlags.Ephemeral });
+            // }
+
+            const name = options.getString('name');
+            const description = options.getString('description');
+            const type = options.getString('type');
+            const rarity = options.getString('rarity');
+            const effectDescription = options.getString('effect_description');
+            const effectDataString = options.getString('effect_data');
+            let effectData = null;
+
+            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+            if (effectDataString) {
+                try {
+                    effectData = JSON.parse(effectDataString);
+                } catch (e) {
+                    return interaction.editReply({ content: '❌ Invalid JSON for `effect_data`. Please ensure it\'s valid JSON (e.g., `{"hp_restore":20}`).' });
+                }
+            }
+
+            try {
+                const checkQuery = 'SELECT * FROM items WHERE name = $1;';
+                const checkResult = await pgClient.query(checkQuery, [name]);
+                if (checkResult.rows.length > 0) {
+                    return interaction.editReply({ content: `❌ An item named "${name}" already exists.` });
+                }
+
+                const insertQuery = `
+                    INSERT INTO items (name, description, item_type, rarity, effect_description, effect_data)
+                    VALUES ($1, $2, $3, $4, $5, $6);
+                `;
+                await pgClient.query(insertQuery, [name, description, type, rarity, effectDescription, effectData]);
+
+                await interaction.editReply({ content: `✅ Item "${name}" (${type}, ${rarity}) created successfully!` });
+
+            } catch (dbError) {
+                console.error('Error creating item in DB:', dbError);
+                return interaction.editReply({ content: '❌ An error occurred while creating the item.' });
+            }
+        } else if (subcommand === 'view') {
+            const name = options.getString('name');
+            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+            try {
+                const query = 'SELECT * FROM items WHERE name = $1;';
+                const result = await pgClient.query(query, [name]);
+                const item = result.rows[0];
+
+                if (!item) {
+                    return interaction.editReply({ content: `❌ Item "${name}" not found.` });
+                }
+
+                const itemEmbed = new EmbedBuilder()
+                    .setColor(0x00FF00)
+                    .setTitle(item.name)
+                    .setDescription(item.description || 'No description provided.')
+                    .addFields(
+                        { name: 'Type', value: item.item_type || 'N/A', inline: true },
+                        { name: 'Rarity', value: item.rarity || 'N/A', inline: true },
+                        { name: 'Effect', value: item.effect_description || 'None', inline: false }
+                    );
+
+                if (item.effect_data) {
+                    itemEmbed.addFields({ name: 'Effect Data (JSON)', value: `\`\`\`json\n${JSON.stringify(item.effect_data, null, 2)}\n\`\`\``, inline: false });
+                }
+
+                await interaction.editReply({ embeds: [itemEmbed] });
+
+            } catch (dbError) {
+                console.error('Error viewing item from DB:', dbError);
+                return interaction.editReply({ content: '❌ An error occurred while fetching item details.' });
+            }
+        } else if (subcommand === 'list') {
+            const typeFilter = options.getString('type');
+            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+            try {
+                let query = 'SELECT name, item_type, rarity FROM items';
+                const params = [];
+                if (typeFilter) {
+                    query += ' WHERE item_type = $1';
+                    params.push(typeFilter);
+                }
+                query += ' ORDER BY name;';
+
+                const result = await pgClient.query(query, params);
+                const items = result.rows;
+
+                if (items.length === 0) {
+                    return interaction.editReply({ content: `No items found${typeFilter ? ` for type "${typeFilter}"` : ''}.` });
+                }
+
+                const itemList = items.map(item => `- **${item.name}** (${item.item_type}, ${item.rarity})`).join('\n');
+                await interaction.editReply({ content: `**Available Items${typeFilter ? ` (${typeFilter})` : ''}:**\n${itemList}` });
+
+            } catch (dbError) {
+                console.error('Error listing items from DB:', dbError);
+                return interaction.editReply({ content: '❌ An error occurred while listing items.' });
+            }
+        }
+    }
+
+    // --- NEW: /inventory command handler ---
+    else if (commandName === 'inventory') {
+        const subcommand = options.getSubcommand();
+        const userId = interaction.user.id;
+
+        if (subcommand === 'view') {
+            const characterName = options.getString('character_name');
+            let character;
+
+            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+            try {
+                if (characterName) {
+                    const query = 'SELECT id, name FROM characters WHERE user_id = $1 AND name = $2;';
+                    const result = await pgClient.query(query, [userId, characterName]);
+                    character = result.rows[0];
+                } else {
+                    const query = 'SELECT id, name FROM characters WHERE user_id = $1 ORDER BY id DESC LIMIT 1;';
+                    const result = await pgClient.query(query, [userId]);
+                    character = result.rows[0];
+                }
+
+                if (!character) {
+                    return interaction.editReply({ content: `❌ Character "${characterName || 'latest'}" not found. Create one with \`/character create\`.` });
+                }
+
+                const inventoryQuery = `
+                    SELECT i.name, i.item_type, i.rarity, ci.quantity
+                    FROM character_items ci
+                    JOIN items i ON ci.item_id = i.id
+                    WHERE ci.character_id = $1
+                    ORDER BY i.name;
+                `;
+                const inventoryResult = await pgClient.query(inventoryQuery, [character.id]);
+                const itemsInInventory = inventoryResult.rows;
+
+                const inventoryEmbed = new EmbedBuilder()
+                    .setColor(0xFFA500)
+                    .setTitle(`${character.name}'s Inventory`)
+                    .setThumbnail(character.avatar_url || null); // Use character's avatar as thumbnail
+
+                if (itemsInInventory.length === 0) {
+                    inventoryEmbed.setDescription('Inventory is empty.');
+                } else {
+                    const itemFields = itemsInInventory.map(item =>
+                        `**${item.name}** (x${item.quantity}) - ${item.item_type} (${item.rarity})`
+                    ).join('\n');
+                    inventoryEmbed.setDescription(itemFields);
+                }
+
+                await interaction.editReply({ embeds: [inventoryEmbed] });
+
+            } catch (dbError) {
+                console.error('Error viewing inventory from DB:', dbError);
+                return interaction.editReply({ content: '❌ An error occurred while fetching the inventory.' });
+            }
+        } else if (subcommand === 'add') {
+            // TODO: Implement admin check here if desired
+            // if (userId !== 'YOUR_DISCORD_USER_ID') {
+            //     return interaction.reply({ content: 'You do not have permission to add items to inventories.', flags: MessageFlags.Ephemeral });
+            // }
+
+            const characterName = options.getString('character_name');
+            const itemName = options.getString('item_name');
+            const quantity = options.getInteger('quantity') || 1;
+
+            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+            try {
+                const characterQuery = 'SELECT id FROM characters WHERE user_id = $1 AND name = $2;';
+                const characterResult = await pgClient.query(characterQuery, [userId, characterName]);
+                const character = characterResult.rows[0];
+
+                if (!character) {
+                    return interaction.editReply({ content: `❌ Character "${characterName}" not found for your user ID.` });
+                }
+
+                const itemQuery = 'SELECT id FROM items WHERE name = $1;';
+                const itemResult = await pgClient.query(itemQuery, [itemName]);
+                const item = itemResult.rows[0];
+
+                if (!item) {
+                    return interaction.editReply({ content: `❌ Item "${itemName}" not found in item definitions. Use \`/item create\` first.` });
+                }
+
+                // Check if character already has the item
+                const checkInventoryQuery = 'SELECT quantity FROM character_items WHERE character_id = $1 AND item_id = $2;';
+                const checkInventoryResult = await pgClient.query(checkInventoryQuery, [character.id, item.id]);
+
+                if (checkInventoryResult.rows.length > 0) {
+                    // Update quantity if item already exists
+                    const currentQuantity = checkInventoryResult.rows[0].quantity;
+                    const newQuantity = currentQuantity + quantity;
+                    const updateQuery = 'UPDATE character_items SET quantity = $1 WHERE character_id = $2 AND item_id = $3;';
+                    await pgClient.query(updateQuery, [newQuantity, character.id, item.id]);
+                    await interaction.editReply({ content: `✅ Added ${quantity}x "${itemName}" to ${characterName}'s inventory. Total: ${newQuantity}.` });
+                } else {
+                    // Insert new entry if item not found in inventory
+                    const insertQuery = 'INSERT INTO character_items (character_id, item_id, quantity) VALUES ($1, $2, $3);';
+                    await pgClient.query(insertQuery, [character.id, item.id, quantity]);
+                    await interaction.editReply({ content: `✅ Added ${quantity}x "${itemName}" to ${characterName}'s inventory.` });
+                }
+
+            } catch (dbError) {
+                console.error('Error adding item to inventory in DB:', dbError);
+                return interaction.editReply({ content: '❌ An error occurred while adding the item to inventory.' });
+            }
+        }
+    }
+
   } catch (error) {
     console.error(`Error executing ${commandName}:`, error);
     if (interaction.replied || interaction.deferred) {
-        // If an initial reply or deferral was already sent, edit it or follow up
         await interaction.followUp({ content: '❌ An unexpected error occurred while executing this command.', flags: MessageFlags.Ephemeral });
     } else {
-        // If no reply or deferral has been sent yet, send a fresh reply
         await interaction.reply({ content: '❌ An unexpected error occurred while executing this command.', flags: MessageFlags.Ephemeral });
     }
   }
@@ -790,4 +1129,4 @@ client.on('interactionCreate', async interaction => {
 
 // Login
 client.login(process.env.DISCORD_TOKEN)
-  .catch(err => console.error('❌ Login failed:', err));  
+  .catch(err => console.error('❌ Login failed:', err));
