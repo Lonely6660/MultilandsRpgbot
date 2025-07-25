@@ -361,32 +361,32 @@ pgClient.connect()
     // --- Insert some default NPCs for testing ---
     const defaultNpcs = [
       {
-        name: 'Goblin Scavenger',
-        description: 'A small, cunning goblin often found scavenging for scraps. Weak, but can be dangerous in groups.',
-        avatar_url: 'https://i.imgur.com/exampleGoblin.png', // Replace with a real URL
+        name: 'Wingslompson'
+        description: ' weldsnacklson brother.',
+        avatar_url: 'https://i1.sndcdn.com/avatars-yn0pmnXMEKlydCTD-FNQaIQ-t500x500.jpg', 
         health_max: 30, health_current: 30,
         sanity_max: 20, sanity_current: 20,
         level: 1, base_damage_dice: '1d4', attack_chain_max: 1,
         is_boss: false, rarity: 'Common'
       },
       {
-        name: 'Forest Spider',
-        description: 'A large, venomous spider lurking in the shadows of the forest.',
+        name: 'Water Bottle',
+        description: 'A water bottle🥀',
         avatar_url: 'https://i.imgur.com/exampleSpider.png', // Replace with a real URL
         health_max: 45, health_current: 45,
         sanity_max: 30, sanity_current: 30,
         level: 2, base_damage_dice: '1d6', attack_chain_max: 1,
-        effect_description: 'Can inflict minor poison.', // Custom field
+        effect_description: 'Hydration.', // Custom field
         is_boss: false, rarity: 'Common'
       },
       {
-        name: 'Ancient Dragon',
-        description: 'A colossal, ancient dragon whose scales gleam like molten gold. A true test of strength.',
-        avatar_url: 'https://i.imgur.com/exampleDragon.png', // Replace with a real URL
+        name: 'GOOFY NEBULA',
+        description: 'nebulas inner demon',
+        avatar_url: 'https://media.discordapp.net/attachments/1302304033611976777/1357875925123072010/image.png?ex=6884cb40&is=688379c0&hm=4579d788f29eed591602b5f197a2f7eaaf6fafec52f1c3b76de1d61ebb79dd8f&=&format=webp&quality=lossless&width=1474&height=680', // Replace with a real URL
         health_max: 500, health_current: 500,
         sanity_max: 300, sanity_current: 300,
         level: 20, base_damage_dice: '4d12+10', attack_chain_max: 3,
-        sanity_decrease_desc: 'Its mere presence can drive mortals mad.',
+        sanity_decrease_desc: 'about_blank.',
         is_boss: true, rarity: 'Boss'
       }
     ];
