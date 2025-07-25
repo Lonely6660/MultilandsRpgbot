@@ -77,18 +77,18 @@ function rollDice(diceNotation) {
  * @returns {string} The new dice notation.
  */
 function calculateDamageDice(baseDice, level) {
-    const match = baseDice.match(/^(\d+)d(\d+)$/);
-    if (!match) return baseDice; // Return original if invalid format
+  const match = baseDice.match(/^(\d+)d(\d+)$/);
+  if (!match) return baseDice; // Return original if invalid format
 
-    const numDice = parseInt(match[1], 10);
-    const dieSize = parseInt(match[2], 10);
+  const numDice = parseInt(match[1], 10);
+  const dieSize = parseInt(match[2], 10);
 
-    // Example progression: increase die size by 1 for every 5 levels
-    // Or, increase die size by 1 for every level for simpler progression
-    const newDieSize = dieSize + level; // Simple progression: +1 to die size per level
-    // const newDieSize = dieSize + Math.floor(level / 5); // Example: +1 to die size every 5 levels
+  // Example progression: increase die size by 1 for every 5 levels
+  // Or, increase die size by 1 for every level for simpler progression
+  const newDieSize = dieSize + level; // Simple progression: +1 to die size per level
+  // const newDieSize = dieSize + Math.floor(level / 5); // Example: +1 to die size every 5 levels
 
-    return `${numDice}d${newDieSize}`;
+  return `${numDice}d${newDieSize}`;
 }
 
 
@@ -110,7 +110,7 @@ pgClient.connect()
         occupation VARCHAR(100),
         appearance_url TEXT,
         health_current INTEGER DEFAULT 100, -- ADDED THIS
-        health_max INTEGER DEFAULT 100,     -- ADDED THIS
+        health_max INTEGER DEFAULT 100,      -- ADDED THIS
         sanity_current INTEGER DEFAULT 100,
         sanity_max INTEGER DEFAULT 100,
         level INTEGER DEFAULT 1,
@@ -133,7 +133,7 @@ pgClient.connect()
         ALTER TABLE characters ADD COLUMN IF NOT EXISTS occupation VARCHAR(100);
         ALTER TABLE characters ADD COLUMN IF NOT EXISTS appearance_url TEXT;
         ALTER TABLE characters ADD COLUMN IF NOT EXISTS health_current INTEGER DEFAULT 100; -- ADDED THIS
-        ALTER TABLE characters ADD COLUMN IF NOT EXISTS health_max INTEGER DEFAULT 100;     -- ADDED THIS
+        ALTER TABLE characters ADD COLUMN IF NOT EXISTS health_max INTEGER DEFAULT 100;      -- ADDED THIS
         ALTER TABLE characters ADD COLUMN IF NOT EXISTS sanity_current INTEGER DEFAULT 100;
         ALTER TABLE characters ADD COLUMN IF NOT EXISTS sanity_max INTEGER DEFAULT 100;
         ALTER TABLE characters ADD COLUMN IF NOT EXISTS level INTEGER DEFAULT 1;
@@ -156,7 +156,7 @@ pgClient.connect()
         name VARCHAR(50) NOT NULL UNIQUE,
         description TEXT,
         effect_type VARCHAR(100), -- e.g., 'damage_multiplier', 'sanity_reduction'
-        effect_value JSONB,       -- Store complex effect data as JSON
+        effect_value JSONB,        -- Store complex effect data as JSON
         inflicted_status VARCHAR(50) -- e.g., 'Fire', 'Bleed'
       );
     `;
@@ -165,1278 +165,978 @@ pgClient.connect()
 
     // --- Insert default affinities if they don't exist ---
     const defaultAffinities = [
-      { name: 'Wrath', description: 'Extra damage on the next attack after you take damage.', effect_type: 'damage_multiplier', effect_value: { multiplier: 1.5 }, inflicted_status: 'Fire' },
-      { name: 'Lust', description: 'Divides your opponent\'s dice by 1.5x.', effect_type: 'dice_division', effect_value: { divisor: 1.5 }, inflicted_status: 'Bleed' },
-      { name: 'Sloth', description: 'Reduces your opponent\'s sanity by 1 every 1 damage in an attack. Stacks.', effect_type: 'sanity_reduction_per_damage', effect_value: {}, inflicted_status: 'Slowness' },
-      { name: 'Gluttony', description: '"Steals" 5 sanity every attack you do.', effect_type: 'sanity_steal', effect_value: { amount: 5 }, inflicted_status: 'Electrified' },
-      { name: 'Greed', description: 'Gets stronger the more the battle goes on for.', effect_type: 'battle_scaling', effect_value: {}, inflicted_status: 'Weakness' },
-      { name: 'Pride', description: 'Reflects damage if you take more than half your health bar.', effect_type: 'damage_reflection', effect_value: {}, inflicted_status: 'Blindness' },
-      { name: 'Envy', description: 'Can "lock" an attack from an enemy.', effect_type: 'attack_lock', effect_value: {}, inflicted_status: 'Poison' },
+      { name: 'Wrath', description: 'Extra damage on the next attack after you take damage.', effect_type: 'damage_multiplier', effect_value: { multiplier: 1.5 }, inflicted_status: null },
+      { name: 'Focus', description: 'Increased accuracy or critical chance for a short duration.', effect_type: 'crit_chance_boost', effect_value: { chance_increase: 0.15, duration_turns: 2 }, inflicted_status: null },
+      { name: 'Dodge', description: 'Increased chance to evade attacks.', effect_type: 'evasion_chance_boost', effect_value: { chance_increase: 0.20, duration_turns: 1 }, inflicted_status: null },
+      { name: 'Regeneration', description: 'Heal a small amount of health each turn.', effect_type: 'health_regen', effect_value: { amount: 5, duration_turns: 3 }, inflicted_status: null },
+      { name: 'Poison', description: 'Deals damage over time.', effect_type: 'damage_over_time', effect_value: { amount: 3, duration_turns: 4 }, inflicted_status: 'Poisoned' },
+      { name: 'Stun', description: 'Prevents target from acting for a turn.', effect_type: 'status_effect', effect_value: { effect: 'stun', duration_turns: 1 }, inflicted_status: 'Stunned' },
+      { name: 'Bleed', description: 'Deals physical damage over time.', effect_type: 'damage_over_time', effect_value: { amount: 4, duration_turns: 3 }, inflicted_status: 'Bleeding' },
+      { name: 'Fire', description: 'Deals fire damage over time.', effect_type: 'damage_over_time', effect_value: { amount: 5, duration_turns: 2 }, inflicted_status: 'Burning' },
     ];
 
     for (const affinity of defaultAffinities) {
-      try {
-        await pgClient.query(
-          'INSERT INTO affinities (name, description, effect_type, effect_value, inflicted_status) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (name) DO NOTHING;',
-          [affinity.name, affinity.description, affinity.effect_type, JSON.stringify(affinity.effect_value), affinity.inflicted_status]
-        );
-      } catch (err) {
-        console.error(`Error inserting affinity ${affinity.name}:`, err);
-      }
+      const { name, description, effect_type, effect_value, inflicted_status } = affinity;
+      const query = `
+        INSERT INTO affinities (name, description, effect_type, effect_value, inflicted_status)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (name) DO NOTHING;
+      `;
+      await pgClient.query(query, [name, description, effect_type, JSON.stringify(effect_value), inflicted_status]);
     }
     console.log('📝 Default affinities ensured.');
 
-    // --- Ensure 'attack_types' table ---
-    const createAttackTypesTableQuery = `
-      CREATE TABLE IF NOT EXISTS attack_types (
-        id SERIAL PRIMARY KEY,
-        name VARCHAR(50) NOT NULL UNIQUE,
-        description TEXT
-      );
-    `;
-    await pgClient.query(createAttackTypesTableQuery);
-    console.log('📝 "attack_types" table ensured.');
-
-    // --- Insert default attack types if they don't exist ---
-    const defaultAttackTypes = [
-      { name: 'Slash', description: 'Clean, precise, fast. Low-damage yet fast weapon.' },
-      { name: 'Pierce', description: 'Calculated, surgical, deadly. Jack-of-all-trades, master-of-none weapon.' },
-      { name: 'Blunt', description: 'Crushing, chaotic, stunning. Slow yet damaging weapon.' },
-      { name: 'Magic', description: 'Weird, wild, do whatever you want. Balanced.' },
-    ];
-
-    for (const type of defaultAttackTypes) {
-      try {
-        await pgClient.query(
-          'INSERT INTO attack_types (name, description) VALUES ($1, $2) ON CONFLICT (name) DO NOTHING;',
-          [type.name, type.description]
-        );
-      } catch (err) {
-        console.error(`Error inserting attack type ${type.name}:`, err);
-      }
-    }
-    console.log('📝 Default attack types ensured.');
-
-    // --- Ensure 'attacks' table (definitions of all attacks) ---
+    // --- Ensure 'attacks' table ---
     const createAttacksTableQuery = `
       CREATE TABLE IF NOT EXISTS attacks (
         id SERIAL PRIMARY KEY,
-        name VARCHAR(100) NOT NULL UNIQUE,
-        type_id INTEGER REFERENCES attack_types(id),
-        affinity_id INTEGER REFERENCES affinities(id),
+        name VARCHAR(255) NOT NULL UNIQUE,
         description TEXT,
-        base_damage_dice VARCHAR(20), -- e.g., '1d4', '1d8'
-        effect_description TEXT,
-        is_locked_default BOOLEAN DEFAULT FALSE
+        base_damage_dice VARCHAR(50) NOT NULL, -- e.g., '1d6', '2d4+2'
+        damage_type VARCHAR(50), -- e.g., 'physical', 'magical', 'fire'
+        sanity_cost INTEGER DEFAULT 0,
+        health_cost INTEGER DEFAULT 0,
+        cooldown_turns INTEGER DEFAULT 0,
+        affinity_id INTEGER REFERENCES affinities(id) ON DELETE SET NULL
       );
     `;
     await pgClient.query(createAttacksTableQuery);
-    console.log('📝 "attacks" definition table ensured.');
+    console.log('📝 "attacks" table ensured.');
 
     // --- Insert default attacks if they don't exist ---
-    // First, fetch IDs for attack_types and affinities
-    const attackTypesMap = (await pgClient.query('SELECT id, name FROM attack_types;')).rows.reduce((map, row) => {
-      map[row.name] = row.id;
-      return map;
-    }, {});
-    const affinitiesMap = (await pgClient.query('SELECT id, name FROM affinities;')).rows.reduce((map, row) => {
-      map[row.name] = row.id;
-      return map;
-    }, {});
-
     const defaultAttacks = [
-      {
-        name: 'Night Weaver\'s Grasp',
-        type: 'Magic',
-        affinity: 'Lust',
-        description: 'Summons shadowy tendrils to ensnare a target.',
-        base_damage_dice: '1d4',
-        effect_description: 'On hit, the target is inflicted with Slowed (reduces the target\'s speed by 1 for 2 turns) and reduces the target\'s sanity by 1.',
-        is_locked_default: false
-      },
-      {
-        name: 'Overfluxing Blinkboot',
-        type: 'Magic',
-        affinity: 'Lust',
-        description: 'Teleports a short distance, allowing him to reposition.',
-        base_damage_dice: '1d8',
-        effect_description: 'On hit, the target is inflicted with Weakness (reduces the target\'s attack roll by 1 for 2 turns).',
-        is_locked_default: true // This attack is locked by default
-      },
-      {
-        name: 'Waving Wrath',
-        type: 'Magic',
-        affinity: 'Lust',
-        description: 'Launches a wave of shadowy energy that divides into telegraphed Evil souls.',
-        base_damage_dice: '1d4',
-        effect_description: 'On hit, the target is inflicted with Weakness and Blindness for 2 turns.',
-        is_locked_default: true // This attack is locked by default
-      }
+      { name: 'Punch', description: 'A basic physical attack.', base_damage_dice: '1d4', damage_type: 'physical', sanity_cost: 0, health_cost: 0, cooldown_turns: 0, affinity_name: null },
+      { name: 'Kick', description: 'A stronger physical attack.', base_damage_dice: '1d6', damage_type: 'physical', sanity_cost: 0, health_cost: 0, cooldown_turns: 0, affinity_name: null },
+      { name: 'Fireball', description: 'Hurl a ball of fire at your enemy.', base_damage_dice: '2d6', damage_type: 'fire', sanity_cost: 10, health_cost: 0, cooldown_turns: 1, affinity_name: 'Fire' },
+      { name: 'Mind Blast', description: 'Assault your foe\'s mind, causing sanity damage.', base_damage_dice: '1d8', damage_type: 'sanity', sanity_cost: 5, health_cost: 0, cooldown_turns: 2, affinity_name: null },
+      { name: 'Poison Dart', description: 'Launch a dart tipped with potent poison.', base_damage_dice: '1d2', damage_type: 'physical', sanity_cost: 3, health_cost: 0, cooldown_turns: 1, affinity_name: 'Poison' },
+      { name: 'Stunning Strike', description: 'A precise strike that can stun your opponent.', base_damage_dice: '1d4', damage_type: 'physical', sanity_cost: 7, health_cost: 0, cooldown_turns: 2, affinity_name: 'Stun' },
     ];
 
     for (const attack of defaultAttacks) {
-      try {
-        const typeId = attackTypesMap[attack.type];
-        const affinityId = affinitiesMap[attack.affinity];
-        if (!typeId || !affinityId) {
-          console.error(`Missing ID for attack type ${attack.type} or affinity ${attack.affinity} for attack ${attack.name}.`);
-          continue;
+      const { name, description, base_damage_dice, damage_type, sanity_cost, health_cost, cooldown_turns, affinity_name } = attack;
+      let affinityId = null;
+      if (affinity_name) {
+        const res = await pgClient.query('SELECT id FROM affinities WHERE name = $1', [affinity_name]);
+        if (res.rows.length > 0) {
+          affinityId = res.rows[0].id;
         }
-        await pgClient.query(
-          'INSERT INTO attacks (name, type_id, affinity_id, description, base_damage_dice, effect_description, is_locked_default) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (name) DO NOTHING;',
-          [attack.name, typeId, affinityId, attack.description, attack.base_damage_dice, attack.effect_description, attack.is_locked_default]
-        );
-      } catch (err) {
-        console.error(`Error inserting attack ${attack.name}:`, err);
       }
+      const query = `
+        INSERT INTO attacks (name, description, base_damage_dice, damage_type, sanity_cost, health_cost, cooldown_turns, affinity_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        ON CONFLICT (name) DO NOTHING;
+      `;
+      await pgClient.query(query, [name, description, base_damage_dice, damage_type, sanity_cost, health_cost, cooldown_turns, affinityId]);
     }
     console.log('📝 Default attacks ensured.');
 
-    // --- Ensure 'character_attacks' table (links characters to their attacks) ---
+    // --- Ensure 'character_attacks' join table ---
     const createCharacterAttacksTableQuery = `
       CREATE TABLE IF NOT EXISTS character_attacks (
-        id SERIAL PRIMARY KEY,
         character_id INTEGER REFERENCES characters(id) ON DELETE CASCADE,
         attack_id INTEGER REFERENCES attacks(id) ON DELETE CASCADE,
-        is_unlocked BOOLEAN DEFAULT FALSE,
-        level INTEGER DEFAULT 0,
-        perfect_hits INTEGER DEFAULT 0,
-        UNIQUE(character_id, attack_id)
+        PRIMARY KEY (character_id, attack_id)
       );
     `;
     await pgClient.query(createCharacterAttacksTableQuery);
     console.log('📝 "character_attacks" table ensured.');
 
-    // --- Ensure 'items' table ---
-    const createItemsTableQuery = `
-      CREATE TABLE IF NOT EXISTS items (
-        id SERIAL PRIMARY KEY,
-        name VARCHAR(255) NOT NULL UNIQUE,
-        description TEXT,
-        item_type VARCHAR(50),      -- e.g., 'Consumable', 'Weapon', 'Armor', 'Quest Item'
-        rarity VARCHAR(50),         -- e.g., 'Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'
-        effect_description TEXT,    -- What does it do when used/equipped?
-        effect_data JSONB           -- For structured effects (e.g., { "health_restore": 20, "sanity_restore": 10 })
+    // --- Ensure 'character_affinities' join table ---
+    const createCharacterAffinitiesTableQuery = `
+      CREATE TABLE IF NOT EXISTS character_affinities (
+        character_id INTEGER REFERENCES characters(id) ON DELETE CASCADE,
+        affinity_id INTEGER REFERENCES affinities(id) ON DELETE CASCADE,
+        PRIMARY KEY (character_id, affinity_id)
       );
     `;
-    await pgClient.query(createItemsTableQuery);
-    console.log('📝 "items" table ensured.');
+    await pgClient.query(createCharacterAffinitiesTableQuery);
+    console.log('📝 "character_affinities" table ensured.');
 
-    // --- Ensure 'character_items' (inventory) table ---
-    const createCharacterItemsTableQuery = `
-      CREATE TABLE IF NOT EXISTS character_items (
+    // --- Ensure 'character_inventory' table ---
+    const createCharacterInventoryTableQuery = `
+      CREATE TABLE IF NOT EXISTS character_inventory (
         id SERIAL PRIMARY KEY,
         character_id INTEGER REFERENCES characters(id) ON DELETE CASCADE,
-        item_id INTEGER REFERENCES items(id) ON DELETE CASCADE,
-        quantity INTEGER DEFAULT 1 CHECK (quantity >= 0),
-        UNIQUE(character_id, item_id)
+        item_name VARCHAR(255) NOT NULL,
+        quantity INTEGER DEFAULT 1,
+        UNIQUE(character_id, item_name)
       );
     `;
-    await pgClient.query(createCharacterItemsTableQuery);
-    console.log('📝 "character_items" table ensured.');
+    await pgClient.query(createCharacterInventoryTableQuery);
+    console.log('📝 "character_inventory" table ensured.');
 
-    // --- NEW: Ensure 'npcs' table ---
-    const createNpcsTableQuery = `
-      CREATE TABLE IF NOT EXISTS npcs (
+    // --- Ensure 'character_status_effects' table ---
+    const createCharacterStatusEffectsTableQuery = `
+      CREATE TABLE IF NOT EXISTS character_status_effects (
         id SERIAL PRIMARY KEY,
-        name VARCHAR(255) NOT NULL UNIQUE,
-        description TEXT,
-        avatar_url TEXT,
-        health_current INTEGER DEFAULT 100,
-        health_max INTEGER DEFAULT 100,
-        sanity_current INTEGER DEFAULT 100,
-        sanity_max INTEGER DEFAULT 100,
-        level INTEGER DEFAULT 1,
-        base_damage_dice VARCHAR(20), -- e.g., '1d6' for basic attacks
-        attack_chain_max INTEGER DEFAULT 1,
-        sanity_increase_desc TEXT,
-        sanity_decrease_desc TEXT,
-        is_boss BOOLEAN DEFAULT FALSE,
-        rarity VARCHAR(50) -- e.g., 'Common', 'Elite', 'Boss'
+        character_id INTEGER REFERENCES characters(id) ON DELETE CASCADE,
+        status_name VARCHAR(100) NOT NULL,
+        duration_turns INTEGER NOT NULL,
+        effect_value JSONB, -- e.g., for poison damage per turn
+        UNIQUE(character_id, status_name)
       );
     `;
-    await pgClient.query(createNpcsTableQuery);
-    console.log('📝 "npcs" table ensured.');
-
-    // --- Insert some default NPCs for testing ---
-    const defaultNpcs = [
-      {
-        name: 'Goblin Scavenger',
-        description: 'A small, cunning goblin often found scavenging for scraps. Weak, but can be dangerous in groups.',
-        avatar_url: 'https://i.imgur.com/exampleGoblin.png', // Replace with a real URL
-        health_max: 30, health_current: 30,
-        sanity_max: 20, sanity_current: 20,
-        level: 1, base_damage_dice: '1d4', attack_chain_max: 1,
-        is_boss: false, rarity: 'Common'
-      },
-      {
-        name: 'Forest Spider',
-        description: 'A large, venomous spider lurking in the shadows of the forest.',
-        avatar_url: 'https://i.imgur.com/exampleSpider.png', // Replace with a real URL
-        health_max: 45, health_current: 45,
-        sanity_max: 30, sanity_current: 30,
-        level: 2, base_damage_dice: '1d6', attack_chain_max: 1,
-        effect_description: 'Can inflict minor poison.', // Custom field
-        is_boss: false, rarity: 'Common'
-      },
-      {
-        name: 'Ancient Dragon',
-        description: 'A colossal, ancient dragon whose scales gleam like molten gold. A true test of strength.',
-        avatar_url: 'https://i.imgur.com/exampleDragon.png', // Replace with a real URL
-        health_max: 500, health_current: 500,
-        sanity_max: 300, sanity_current: 300,
-        level: 20, base_damage_dice: '4d12+10', attack_chain_max: 3,
-        sanity_decrease_desc: 'Its mere presence can drive mortals mad.',
-        is_boss: true, rarity: 'Boss'
-      }
-    ];
-
-    for (const npc of defaultNpcs) { // Corrected from defaultNpts
-      try {
-        await pgClient.query(
-          `INSERT INTO npcs (name, description, avatar_url, health_current, health_max, sanity_current, sanity_max, level, base_damage_dice, attack_chain_max, sanity_increase_desc, sanity_decrease_desc, is_boss, rarity)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) ON CONFLICT (name) DO NOTHING;`,
-          [npc.name, npc.description, npc.avatar_url, npc.health_current, npc.health_max, npc.sanity_current, npc.sanity_max, npc.level, npc.base_damage_dice, npc.attack_chain_max, npc.sanity_increase_desc || null, npc.sanity_decrease_desc || null, npc.is_boss, npc.rarity]
-        );
-      } catch (err) {
-        console.error(`Error inserting NPC ${npc.name}:`, err);
-      }
-    }
-    console.log('📝 Default NPCs ensured.');
-
-    // --- NEW: Ensure 'battles' table ---
-    const createBattlesTableQuery = `
-      CREATE TABLE IF NOT EXISTS battles (
-        id SERIAL PRIMARY KEY,
-        guild_id VARCHAR(255) NOT NULL,
-        channel_id VARCHAR(255) NOT NULL,
-        status VARCHAR(50) DEFAULT 'active', -- 'active', 'ended', 'paused'
-        current_turn_participant_id INTEGER, -- Refers to battle_participants.id
-        turn_order JSONB,                   -- Array of { type: 'character'|'npc', battle_participant_id: id }
-        round_number INTEGER DEFAULT 1,
-        created_at TIMESTAMP DEFAULT NOW(),
-        last_activity TIMESTAMP DEFAULT NOW()
-      );
-    `;
-    await pgClient.query(createBattlesTableQuery);
-    console.log('📝 "battles" table ensured.');
-
-    // --- NEW: Ensure 'battle_participants' table ---
-    const createBattleParticipantsTableQuery = `
-      CREATE TABLE IF NOT EXISTS battle_participants (
-        id SERIAL PRIMARY KEY,
-        battle_id INTEGER REFERENCES battles(id) ON DELETE CASCADE,
-        character_id INTEGER REFERENCES characters(id) ON DELETE CASCADE, -- NULL for NPCs
-        npc_id INTEGER REFERENCES npcs(id) ON DELETE CASCADE,             -- NULL for characters
-        current_health INTEGER NOT NULL,
-        current_sanity INTEGER NOT NULL,
-        is_player BOOLEAN NOT NULL,                                       -- True if character, False if NPC
-        UNIQUE(battle_id, character_id, npc_id) -- Ensures unique participant per battle. Handle NULLs for one-or-the-other.
-      );
-    `;
-    await pgClient.query(createBattleParticipantsTableQuery);
-    console.log('📝 "battle_participants" table ensured.');
-
+    await pgClient.query(createCharacterStatusEffectsTableQuery);
+    console.log('📝 "character_status_effects" table ensured.');
 
   })
-  .catch(err => console.error('❌ PostgreSQL Connection Error:', err));
+  .catch(err => {
+    console.error('❌ PostgreSQL Connection Error:', err);
+  });
 
 
-// Command Registration
+// Discord Bot Commands
 const commands = [
   new SlashCommandBuilder()
-    .setName('character')
-    .setDescription('Manage your in-character personas.')
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('create')
-        .setDescription('Create a new character.')
-        .addStringOption(option =>
-          option.setName('name')
-            .setDescription('The name of your character.')
-            .setRequired(true))
-        .addStringOption(option =>
-          option.setName('avatar_url')
-            .setDescription('The URL for your character\'s avatar image.')
-            .setRequired(true))
-        .addStringOption(option =>
-          option.setName('gender')
-            .setDescription('The character\'s gender.')
-            .setRequired(false))
-        .addIntegerOption(option =>
-          option.setName('age')
-            .setDescription('The character\'s age.')
-            .setRequired(false))
-        .addStringOption(option =>
-          option.setName('species')
-            .setDescription('The character\'s species.')
-            .setRequired(false))
-        .addStringOption(option =>
-          option.setName('occupation')
-            .setDescription('The character\'s occupation.')
-            .setRequired(false))
-        .addStringOption(option =>
-          option.setName('appearance_url')
-            .setDescription('The URL for your character\'s full appearance image.')
-            .setRequired(false))
-        .addStringOption(option =>
-            option.setName('sanity_increase')
-            .setDescription('What makes your character\'s sanity increase?')
-            .setRequired(false))
-        .addStringOption(option =>
-            option.setName('sanity_decrease')
-            .setDescription('What makes your character\'s sanity decrease?')
-            .setRequired(false))
-        .addStringOption(option =>
-            option.setName('starting_attack')
-            .setDescription('The name of your character\'s starting attack (e.g., "Night Weaver\'s Grasp").')
-            .setRequired(false)))
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('sheet') // New subcommand to display full character sheet
-        .setDescription('Display your character\'s full sheet.')
-        .addStringOption(option =>
-          option.setName('name')
-            .setDescription('The name of the character to display (defaults to your latest).')
-            .setRequired(false)))
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('list')
-        .setDescription('List your created characters.'))
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('set_default')
-        .setDescription('Set a character as your default.')
-        .addStringOption(option =>
-          option.setName('name')
-            .setDescription('The name of the character to set as default.')
-            .setRequired(true)))
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('delete')
-        .setDescription('Delete a character.')
-        .addStringOption(option =>
-          option.setName('name')
-            .setDescription('The name of the character to delete.')
-            .setRequired(true))),
-
+    .setName('ping')
+    .setDescription('Replies with Pong!'),
   new SlashCommandBuilder()
-    .setName('rp')
-    .setDescription('Send an in-character message.')
+    .setName('createcharacter')
+    .setDescription('Creates a new RPG character for you.')
     .addStringOption(option =>
-      option.setName('message')
-        .setDescription('The message to send as your character.')
+      option.setName('name')
+        .setDescription('Your character\'s name')
         .setRequired(true))
-    .addChannelOption(option =>
-      option.setName('channel')
-        .setDescription('The channel to send the message in (defaults to current).')
-        .addChannelTypes(0)), // 0 for Text Channels
-
+    .addStringOption(option =>
+      option.setName('avatar_url')
+        .setDescription('A URL for your character\'s avatar image')
+        .setRequired(true))
+    .addStringOption(option =>
+      option.setName('gender')
+        .setDescription('Your character\'s gender')
+        .setRequired(false))
+    .addIntegerOption(option =>
+      option.setName('age')
+        .setDescription('Your character\'s age')
+        .setRequired(false))
+    .addStringOption(option =>
+      option.setName('species')
+        .setDescription('Your character\'s species')
+        .setRequired(false))
+    .addStringOption(option =>
+      option.setName('occupation')
+        .setDescription('Your character\'s occupation')
+        .setRequired(false))
+    .addStringOption(option =>
+      option.setName('appearance_url')
+        .setDescription('A URL for a full appearance image of your character')
+        .setRequired(false)),
+  new SlashCommandBuilder()
+    .setName('mycharacter')
+    .setDescription('Displays your current character\'s stats.'),
+  new SlashCommandBuilder()
+    .setName('deletecharacter')
+    .setDescription('Deletes your current character.'),
   new SlashCommandBuilder()
     .setName('roll')
-    .setDescription('Rolls dice with a specified notation (e.g., 1d4, 2d6+3).')
+    .setDescription('Rolls dice (e.g., 1d6, 2d8+3).')
     .addStringOption(option =>
       option.setName('dice')
-        .setDescription('The dice notation (e.g., 1d4, 2d6+3).')
+        .setDescription('The dice notation (e.g., 1d6, 2d8+3)')
         .setRequired(true)),
-
-  // --- /item command for managing item definitions ---
   new SlashCommandBuilder()
-    .setName('item')
-    .setDescription('Manage game item definitions (admin only).')
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('create')
-        .setDescription('Define a new item type.')
-        .addStringOption(option =>
-          option.setName('name')
-            .setDescription('The name of the item.')
-            .setRequired(true))
-        .addStringOption(option =>
-          option.setName('description')
-            .setDescription('A brief description of the item.')
-            .setRequired(true))
-        .addStringOption(option =>
-          option.setName('type')
-            .setDescription('The type of item (e.g., Consumable, Weapon, Armor, Quest Item).')
-            .setRequired(true)
-            .addChoices(
-                { name: 'Consumable', value: 'Consumable' },
-                { name: 'Weapon', value: 'Weapon' },
-                { name: 'Armor', value: 'Armor' },
-                { name: 'Quest Item', value: 'Quest Item' },
-                { name: 'Misc', value: 'Misc' }
-            ))
-        .addStringOption(option =>
-          option.setName('rarity')
-            .setDescription('The rarity of the item (e.g., Common, Rare, Legendary).')
-            .setRequired(true)
-            .addChoices(
-                { name: 'Common', value: 'Common' },
-                { name: 'Uncommon', value: 'Uncommon' },
-                { name: 'Rare', value: 'Rare' },
-                { name: 'Epic', value: 'Epic' },
-                { name: 'Legendary', value: 'Legendary' }
-            ))
-        .addStringOption(option =>
-          option.setName('effect_description')
-            .setDescription('What the item does (e.g., "Restores 20 HP").')
-            .setRequired(false))
-        .addStringOption(option =>
-          option.setName('effect_data')
-            .setDescription('JSON data for item effects (e.g., {"hp_restore":20, "sanity_restore":10}).')
-            .setRequired(false)))
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('view')
-        .setDescription('View details of an item type.')
-        .addStringOption(option =>
-          option.setName('name')
-            .setDescription('The name of the item to view.')
-            .setRequired(true)))
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('list')
-        .setDescription('List all defined item types.')
-        .addStringOption(option =>
-          option.setName('type')
-            .setDescription('Filter by item type (e.g., Consumable, Weapon).')
-            .setRequired(false)
-            .addChoices(
-                { name: 'Consumable', value: 'Consumable' },
-                { name: 'Weapon', value: 'Weapon' },
-                { name: 'Armor', value: 'Armor' },
-                { name: 'Quest Item', value: 'Quest Item' },
-                { name: 'Misc', value: 'Misc' }
-            ))),
-
-  // --- /inventory command for managing character inventories ---
+    .setName('attack')
+    .setDescription('Perform an attack with your character.')
+    .addStringOption(option =>
+      option.setName('attack_name')
+        .setDescription('The name of the attack to use (e.g., Punch, Fireball)')
+        .setRequired(true))
+    .addUserOption(option =>
+      option.setName('target')
+        .setDescription('The user you want to attack (optional, for PvP or specific targets)')
+        .setRequired(false)),
+  new SlashCommandBuilder()
+    .setName('addattack')
+    .setDescription('Adds an attack to your character\'s available attacks.')
+    .addStringOption(option =>
+      option.setName('attack_name')
+        .setDescription('The name of the attack to add (e.g., Fireball, Stun)')
+        .setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('removeattack')
+    .setDescription('Removes an attack from your character\'s available attacks.')
+    .addStringOption(option =>
+      option.setName('attack_name')
+        .setDescription('The name of the attack to remove')
+        .setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('additem')
+    .setDescription('Adds an item to your character\'s inventory.')
+    .addStringOption(option =>
+      option.setName('item_name')
+        .setDescription('The name of the item to add')
+        .setRequired(true))
+    .addIntegerOption(option =>
+      option.setName('quantity')
+        .setDescription('The quantity of the item (default: 1)')
+        .setRequired(false)),
+  new SlashCommandBuilder()
+    .setName('removeitem')
+    .setDescription('Removes an item from your character\'s inventory.')
+    .addStringOption(option =>
+      option.setName('item_name')
+        .setDescription('The name of the item to remove')
+        .setRequired(true))
+    .addIntegerOption(option =>
+      option.setName('quantity')
+        .setDescription('The quantity of the item to remove (default: 1)')
+        .setRequired(false)),
   new SlashCommandBuilder()
     .setName('inventory')
-    .setDescription('Manage character inventories and items.')
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('view')
-        .setDescription('View a character\'s inventory.')
-        .addStringOption(option =>
-          option.setName('character_name')
-            .setDescription('The name of the character whose inventory to view (defaults to your latest).')
-            .setRequired(false)))
-    .addSubcommand(subcommand => // Admin-only for now
-      subcommand
-        .setName('add')
-        .setDescription('Add an item to a character\'s inventory (admin only).')
-        .addStringOption(option =>
-          option.setName('character_name')
-            .setDescription('The name of the character to add the item to.')
-            .setRequired(true))
-        .addStringOption(option =>
-          option.setName('item_name')
-            .setDescription('The name of the item to add.')
-            .setRequired(true))
-        .addIntegerOption(option =>
-          option.setName('quantity')
-            .setDescription('The quantity of the item to add (default is 1).')
-            .setRequired(false))),
-
-  // --- NEW: /battle command for initiating and managing battles ---
+    .setDescription('Displays your character\'s inventory.'),
   new SlashCommandBuilder()
-    .setName('battle')
-    .setDescription('Initiate and manage combat encounters.')
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('start')
-        .setDescription('Start a new battle against an opponent.')
-        .addStringOption(option =>
-          option.setName('opponent_name')
-            .setDescription('The name of the NPC opponent to fight (e.g., "Goblin Scavenger").')
-            .setRequired(true)))
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('status')
-        .setDescription('View the current status of the battle in this channel.'))
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('end')
-        .setDescription('End the current battle in this channel (admin only).')) // Admin-only initially
+    .setName('heal')
+    .setDescription('Heals your character.')
+    .addIntegerOption(option =>
+      option.setName('amount')
+        .setDescription('The amount of health to heal')
+        .setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('recover_sanity')
+    .setDescription('Recovers your character\'s sanity.')
+    .addIntegerOption(option =>
+      option.setName('amount')
+        .setDescription('The amount of sanity to recover')
+        .setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('set_sanity_desc')
+    .setDescription('Set descriptions for sanity changes (increase/decrease).')
+    .addStringOption(option =>
+      option.setName('type')
+        .setDescription('Type of description (increase or decrease)')
+        .setRequired(true)
+        .addChoices(
+          { name: 'Increase', value: 'increase' },
+          { name: 'Decrease', value: 'decrease' }
+        ))
+    .addStringOption(option =>
+      option.setName('description')
+        .setDescription('The description text')
+        .setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('level_up')
+    .setDescription('Manually levels up your character (for testing/GM use).')
+    .addIntegerOption(option =>
+      option.setName('levels')
+        .setDescription('Number of levels to add')
+        .setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('give_cxp')
+    .setDescription('Gives CXP (Character Experience Points) to your character.')
+    .addIntegerOption(option =>
+      option.setName('amount')
+        .setDescription('The amount of CXP to give')
+        .setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('set_attack_chain_max')
+    .setDescription('Sets the maximum attack chain for your character.')
+    .addIntegerOption(option =>
+      option.setName('max_chain')
+        .setDescription('The maximum number of attacks in a chain')
+        .setRequired(true)),
 ];
 
-// .map(command => command.toJSON(); is called after the array of commands.
-// It's not part of the individual SlashCommandBuilder definition.
-// So, it's defined once at the end.
-
+// Register Slash Commands
 const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
-client.once('ready', async () => {
-  console.log(`🚀 ${client.user.tag} is online!`);
-
+(async () => {
   try {
-    console.log('⌛ Registering slash commands...');
-    // Register commands globally if TEST_GUILD_ID is not set, otherwise only in test guild
-    if (process.env.TEST_GUILD_ID) {
-      await rest.put(
-        Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.TEST_GUILD_ID),
-        { body: commands.map(command => command.toJSON()) }, // Correctly map here
-      );
-      console.log('⚡ Commands registered in test server');
-    } else {
-      await rest.put(
-        Routes.applicationCommands(process.env.CLIENT_ID),
-        { body: commands.map(command => command.toJSON()) }, // Correctly map here
-      );
-      console.log('⚡ Commands registered globally');
-    }
+    console.log('Started refreshing application (/) commands.');
+
+    // Use TEST_GUILD_ID for guild-specific commands during development
+    // For global commands, use Routes.applicationCommands(process.env.CLIENT_ID)
+    await rest.put(
+      Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.TEST_GUILD_ID),
+      { body: commands },
+    );
+
+    console.log('Successfully reloaded application (/) commands.');
   } catch (error) {
-    console.error('❌ Failed to register commands:', error);
+    console.error('Error refreshing commands:', error);
   }
-});
+})();
 
-// --- GLOBAL ERROR HANDLERS ---
-process.on('unhandledRejection', error => {
-  console.error('❌ Unhandled promise rejection:', error);
-  // Optional: Perform graceful shutdown or notify
-});
 
-process.on('uncaughtException', error => {
-  console.error('❌ Uncaught exception:', error);
-  // This is a synchronous error that wasn't caught.
-  // It's critical to handle these, but after logging,
-  // the process might be in an unstable state.
-  // Optional: Perform graceful shutdown
-  process.exit(1); // Exit with a failure code
+// Discord Bot Events
+client.on('ready', () => {
+  console.log(`Logged in as ${client.user.tag}!`);
 });
-
-// Discord.js client error handling
-client.on('error', err => {
-    console.error('❌ Discord.js Client Error:', err);
-});
-
-client.on('shardError', err => {
-    console.error('❌ Discord.js Shard Error:', err);
-});
-
-// --- DEDICATED POSTGRESQL CLIENT ERROR HANDLER ---
-pgClient.on('error', err => {
-    console.error('❌ PostgreSQL Client Error (Caught by Listener):', err);
-    // This is crucial. When the pg client emits an error, it often means the connection is bad.
-    // You might want to implement a reconnection strategy here.
-    // For now, logging it will help identify the cause without crashing the process immediately.
-});
-// --- END DEDICATED POSTGRESQL CLIENT ERROR HANDLER ---
-
 
 client.on('interactionCreate', async interaction => {
-  if (!interaction.isCommand()) return;
+  if (!interaction.isChatInputCommand()) return;
 
-  const { commandName, options } = interaction;
+  const { commandName } = interaction;
+  const userId = interaction.user.id;
 
-  try {
-    if (commandName === 'character') {
-      const subcommand = options.getSubcommand();
-      const userId = interaction.user.id;
+  // Helper to fetch character
+  const getCharacter = async (uid) => {
+    const res = await pgClient.query('SELECT * FROM characters WHERE user_id = $1', [uid]);
+    return res.rows[0];
+  };
 
-      if (subcommand === 'create') {
-        const name = options.getString('name');
-        const avatarURL = options.getString('avatar_url');
-        const gender = options.getString('gender');
-        const age = options.getInteger('age');
-        const species = options.getString('species');
-        const occupation = options.getString('occupation');
-        const appearanceURL = options.getString('appearance_url');
-        const sanityIncrease = options.getString('sanity_increase');
-        const sanityDecrease = options.getString('sanity_decrease');
-        const startingAttackName = options.getString('starting_attack');
+  // Helper to update character health/sanity
+  const updateCharacterStats = async (charId, healthChange = 0, sanityChange = 0) => {
+    const char = await pgClient.query('SELECT health_current, health_max, sanity_current, sanity_max FROM characters WHERE id = $1', [charId]);
+    if (!char.rows[0]) return;
 
-        // --- Defer the reply immediately to prevent "Unknown interaction" ---
-        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    let newHealth = char.rows[0].health_current + healthChange;
+    let newSanity = char.rows[0].sanity_current + sanityChange;
 
-        // Basic URL validation for avatar_url
-        try {
-            new URL(avatarURL);
-        } catch (e) {
-            // Use editReply as the interaction is already deferred
-            return interaction.editReply({ content: '❌ Invalid URL for avatar. Please provide a valid image URL.' });
-        }
-        // Basic URL validation for appearance_url if provided
-        if (appearanceURL) {
-            try {
-                new URL(appearanceURL);
-            } catch (e) {
-                // Use editReply as the interaction is already deferred
-                return interaction.editReply({ content: '❌ Invalid URL for appearance. Please provide a valid image URL.' });
-            }
-        }
+    newHealth = Math.min(Math.max(0, newHealth), char.rows[0].health_max);
+    newSanity = Math.min(Math.max(0, newSanity), char.rows[0].sanity_max);
 
-        try {
-            // Check if character already exists for this user
-            const checkQuery = 'SELECT * FROM characters WHERE user_id = $1 AND name = $2;';
-            const checkResult = await pgClient.query(checkQuery, [userId, name]);
+    await pgClient.query(
+      'UPDATE characters SET health_current = $1, sanity_current = $2 WHERE id = $3',
+      [newHealth, newSanity, charId]
+    );
+    return { newHealth, newSanity };
+  };
 
-            if (checkResult.rows.length > 0) {
-              // Use editReply as the interaction is already deferred
-              return interaction.editReply({ content: `❌ You already have a character named "${name}".` });
-            }
+  // Helper to add/remove status effects
+  const manageStatusEffect = async (charId, statusName, duration, effectValue = null, action = 'add') => {
+    if (action === 'add') {
+      await pgClient.query(
+        `INSERT INTO character_status_effects (character_id, status_name, duration_turns, effect_value)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (character_id, status_name) DO UPDATE SET duration_turns = EXCLUDED.duration_turns, effect_value = EXCLUDED.effect_value;`,
+        [charId, statusName, duration, effectValue ? JSON.stringify(effectValue) : null]
+      );
+    } else if (action === 'remove') {
+      await pgClient.query(
+        'DELETE FROM character_status_effects WHERE character_id = $1 AND status_name = $2',
+        [charId, statusName]
+      );
+    }
+  };
 
-            // Insert new character with all new fields, including sanity descriptions
-            const insertQuery = `
-              INSERT INTO characters (user_id, name, avatar_url, gender, age, species, occupation, appearance_url, sanity_increase_desc, sanity_decrease_desc)
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id, sanity_max; -- Return the character ID and max sanity
-            `;
-            const insertResult = await pgClient.query(insertQuery, [userId, name, avatarURL, gender, age, species, occupation, appearanceURL, sanityIncrease, sanityDecrease]);
-            const newCharacterId = insertResult.rows[0].id;
+  switch (commandName) {
+    case 'ping':
+      await interaction.reply('Pong!');
+      break;
 
-            let finalAttackToAssign = 'Night Weaver\'s Grasp'; // Default fallback attack
-            if (startingAttackName) {
-                // Validate if the chosen starting attack exists in the 'attacks' table
-                const checkAttackQuery = 'SELECT id FROM attacks WHERE name = $1;';
-                const checkAttackResult = await pgClient.query(checkAttackQuery, [startingAttackName]);
-                if (checkAttackResult.rows.length > 0) {
-                    finalAttackToAssign = startingAttackName;
-                } else {
-                    // Use followUp here to send an additional message after the initial deferReply
-                    await interaction.followUp({ content: `⚠️ The starting attack "${startingAttackName}" was not found in my database. Using "${finalAttackToAssign}" as your default starting attack.`, flags: MessageFlags.Ephemeral });
-                }
-            }
-
-            const getInitialAttackIdQuery = 'SELECT id FROM attacks WHERE name = $1;';
-            const initialAttackResult = await pgClient.query(getInitialAttackIdQuery, [finalAttackToAssign]);
-
-            if (initialAttackResult.rows.length > 0) {
-                const initialAttackId = initialAttackResult.rows[0].id;
-                const assignAttackQuery = `
-                    INSERT INTO character_attacks (character_id, attack_id, is_unlocked, level, perfect_hits)
-                    VALUES ($1, $2, TRUE, 0, 0); -- Start unlocked, level 0, 0 perfect hits
-                `;
-                await pgClient.query(assignAttackQuery, [newCharacterId, initialAttackId]);
-                console.log(`Assigned ${finalAttackToAssign} to new character ${name}.`);
-            } else {
-                console.error(`Initial attack "${finalAttackToAssign}" not found in 'attacks' table. This should not happen if default is 'Night Weaver\'s Grasp'.`);
-            }
-
-            // Final reply uses editReply as the interaction is already deferred
-            await interaction.editReply({ content: `✅ Character "${name}" created successfully!` + (startingAttackName && startingAttackName !== finalAttackToAssign ? ` (Used "${finalAttackToAssign}" as starting attack).` : '') });
-
-        } catch (dbError) {
-            console.error('Error creating character in DB:', dbError);
-            // Ensure you use editReply if deferred/replied, otherwise reply
-            if (interaction.deferred || interaction.replied) {
-                return interaction.editReply({ content: '❌ An error occurred while saving your character.' });
-            } else {
-                return interaction.reply({ content: '❌ An error occurred while saving your character.', flags: MessageFlags.Ephemeral });
-            }
-        }
-
-
-      } else if (subcommand === 'sheet') { // 'sheet' subcommand handler
-        const characterName = options.getString('name');
-        let character;
-
-        // Defer reply for sheet command, could be ephemeral or not
-        await interaction.deferReply({ flags: MessageFlags.Ephemeral }); // Made ephemeral for sheet for privacy
-
-        try {
-          if (characterName) {
-            const query = 'SELECT * FROM characters WHERE user_id = $1 AND name = $2;';
-            const result = await pgClient.query(query, [userId, characterName]);
-            character = result.rows[0];
-          } else {
-            // Fetch the latest created character if no name is provided
-            const query = 'SELECT * FROM characters WHERE user_id = $1 ORDER BY id DESC LIMIT 1;';
-            const result = await pgClient.query(query, [userId]);
-            character = result.rows[0];
-          }
-
-          if (!character) {
-            return interaction.editReply({ content: `❌ Character "${characterName || 'latest'}" not found. Create one with \`/character create\`.` });
-          }
-
-          // Fetch character's attacks
-          const characterAttacksQuery = `
-            SELECT a.name, ca.level, ca.perfect_hits, at.name AS type_name, af.name AS affinity_name, a.base_damage_dice
-            FROM character_attacks ca
-            JOIN attacks a ON ca.attack_id = a.id
-            JOIN attack_types at ON a.type_id = at.id
-            JOIN affinities af ON a.affinity_id = af.id
-            WHERE ca.character_id = $1 AND ca.is_unlocked = TRUE;
-          `;
-          const characterAttacksResult = await pgClient.query(characterAttacksQuery, [character.id]);
-          const unlockedAttacks = characterAttacksResult.rows;
-
-          const characterEmbed = new EmbedBuilder()
-            .setColor(0x0099FF)
-            .setTitle(character.name)
-            .setDescription(`**${character.gender || 'N/A'}**, ${character.age || 'N/A'} years old ${character.species ? `(${character.species})` : ''}`)
-            .setThumbnail(character.avatar_url)
-            .addFields(
-              { name: 'Occupation', value: character.occupation || 'N/A', inline: true },
-              { name: 'Level', value: character.level.toString(), inline: true },
-              { name: 'CXP', value: character.cxp.toString(), inline: true },
-              { name: 'Health', value: `${character.health_current}/${character.health_max}`, inline: true }, // ADDED THIS
-              { name: 'Sanity', value: `${character.sanity_current}/${character.sanity_max}`, inline: true },
-              { name: 'Attack Chain Max', value: character.attack_chain_max.toString(), inline: true },
-              { name: 'Sanity Increases With', value: character.sanity_increase_desc || 'N/A', inline: false },
-              { name: 'Sanity Decreases With', value: character.sanity_decrease_desc || 'N/A', inline: false }
-              // Add more fields as you implement them (Skills, Affinities, Passives, Weaponry, Friendships)
-            );
-
-          if (unlockedAttacks.length > 0) {
-            const attacksField = unlockedAttacks.map(att => {
-              const currentDamageDice = calculateDamageDice(att.base_damage_dice, att.level);
-              return `**${att.name}** (Lvl ${att.level}, Hits: ${att.perfect_hits}/5)\n` +
-                     `  Type: ${att.type_name}, Affinity: ${att.affinity_name}, Damage: ${currentDamageDice}`;
-            }).join('\n');
-            characterEmbed.addFields({ name: 'Unlocked Attacks', value: attacksField, inline: false });
-          } else {
-            characterEmbed.addFields({ name: 'Unlocked Attacks', value: 'None yet.', inline: false });
-          }
-
-          characterEmbed.setImage(character.appearance_url || null)
-            .setFooter({ text: `Character ID: ${character.id} | User ID: ${character.user_id}` })
-            .setTimestamp();
-
-          await interaction.editReply({ embeds: [characterEmbed] }); // Use editReply
-
-        } catch (dbError) {
-          console.error('Error fetching character sheet from DB:', dbError);
-          if (interaction.deferred || interaction.replied) {
-              return interaction.editReply({ content: '❌ An error occurred while fetching your character sheet.' });
-          } else {
-              return interaction.reply({ content: '❌ An error occurred while fetching your character sheet.', flags: MessageFlags.Ephemeral });
-          }
-        }
-
-      } else if (subcommand === 'list') {
-        // Defer reply for list command
-        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-        try {
-            const query = 'SELECT name, avatar_url, level, cxp FROM characters WHERE user_id = $1;';
-            const result = await pgClient.query(query, [userId]);
-            const characters = result.rows;
-
-            if (characters.length === 0) {
-              return interaction.editReply({ content: 'You have no characters yet. Create one with `/character create`.' });
-            }
-
-            const characterList = characters.map(char => `- ${char.name} (Lvl ${char.level}, CXP ${char.cxp})`).join('\n');
-            await interaction.editReply({ content: `Your characters:\n${characterList}` });
-
-        } catch (dbError) {
-            console.error('Error listing characters from DB:', dbError);
-            if (interaction.deferred || interaction.replied) {
-                return interaction.editReply({ content: '❌ An error occurred while fetching your characters.' });
-            } else {
-                return interaction.reply({ content: '❌ An error occurred while fetching your characters.', flags: MessageFlags.Ephemeral });
-            }
-        }
-
-      } else if (subcommand === 'set_default') {
-        // Implement default character logic here if needed,
-        // e.g., by adding a 'isDefault' field to schema or a separate UserPreferences model.
-        await interaction.reply({ content: 'Default character setting is not yet implemented.', flags: MessageFlags.Ephemeral });
-
-      } else if (subcommand === 'delete') {
-        const name = options.getString('name');
-        // Defer reply immediately
-        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-        try {
-            const query = 'DELETE FROM characters WHERE user_id = $1 AND name = $2;';
-            const result = await pgClient.query(query, [userId, name]);
-
-            if (result.rowCount === 0) {
-              return interaction.editReply({ content: `❌ Character "${name}" not found.` });
-            }
-
-            await interaction.editReply({ content: `✅ Character "${name}" deleted successfully!` });
-        } catch (dbError) {
-            console.error('Error deleting character from DB:', dbError);
-            if (interaction.deferred || interaction.replied) {
-                return interaction.editReply({ content: '❌ An error occurred while deleting your character.' });
-            } else {
-                return interaction.reply({ content: '❌ An error occurred while deleting your character.', flags: MessageFlags.Ephemeral });
-            }
-        }
-      }
-
-    } else if (commandName === 'rp') {
-      const userId = interaction.user.id;
+    case 'createcharacter':
       try {
-        const query = 'SELECT name, avatar_url FROM characters WHERE user_id = $1 LIMIT 1;';
-        const result = await pgClient.query(query, [userId]);
-        const character = result.rows[0];
+        const name = interaction.options.getString('name');
+        const avatarUrl = interaction.options.getString('avatar_url');
+        const gender = interaction.options.getString('gender');
+        const age = interaction.options.getInteger('age');
+        const species = interaction.options.getString('species');
+        const occupation = interaction.options.getString('occupation');
+        const appearanceUrl = interaction.options.getString('appearance_url');
 
-        if (!character) {
-          return interaction.reply({ content: 'You need to create a character first with `/character create`.', flags: MessageFlags.Ephemeral });
+        // Check if character already exists for this user
+        const existingChar = await getCharacter(userId);
+        if (existingChar) {
+          await interaction.reply({ content: `You already have a character named **${existingChar.name}**. You can only have one character at a time.`, ephemeral: true });
+          return;
         }
 
-        const channel = options.getChannel('channel') || interaction.channel;
+        const res = await pgClient.query(
+          `INSERT INTO characters (user_id, name, avatar_url, gender, age, species, occupation, appearance_url)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           RETURNING *;`,
+          [userId, name, avatarUrl, gender, age, species, occupation, appearanceUrl]
+        );
+        const newCharacter = res.rows[0];
 
-        if (!channel.permissionsFor(client.user).has(['ManageWebhooks', 'SendMessages'])) {
-          return interaction.reply({
-              content: `❌ I don't have permission to create webhooks or send messages in ${channel.name}.`,
-              flags: MessageFlags.Ephemeral
-          });
-        }
+        const embed = new EmbedBuilder()
+          .setColor(0x0099FF)
+          .setTitle(`✨ Character Created: ${newCharacter.name} ✨`)
+          .setDescription(`Welcome, **${newCharacter.name}**! Your adventure begins now.`)
+          .setThumbnail(newCharacter.avatar_url)
+          .addFields(
+            { name: 'Gender', value: newCharacter.gender || 'N/A', inline: true },
+            { name: 'Age', value: newCharacter.age ? newCharacter.age.toString() : 'N/A', inline: true },
+            { name: 'Species', value: newCharacter.species || 'N/A', inline: true },
+            { name: 'Occupation', value: newCharacter.occupation || 'N/A', inline: true },
+            { name: 'Health', value: `${newCharacter.health_current}/${newCharacter.health_max}`, inline: true },
+            { name: 'Sanity', value: `${newCharacter.sanity_current}/${newCharacter.sanity_max}`, inline: true },
+            { name: 'Level', value: newCharacter.level.toString(), inline: true },
+            { name: 'CXP', value: newCharacter.cxp.toString(), inline: true }
+          )
+          .setImage(newCharacter.appearance_url || null) // Add full appearance image if provided
+          .setTimestamp()
+          .setFooter({ text: `Character ID: ${newCharacter.id}` });
 
-        const message = options.getString('message');
-
-        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-
-        const webhooks = await channel.fetchWebhooks();
-        let webhook = webhooks.find(w => w.owner.id === client.user.id && w.name === 'RP Webhook');
-
-        if (!webhook) {
-          webhook = await channel.createWebhook({
-            name: 'RP Webhook',
-            avatar: client.user.displayAvatarURL(),
-            reason: 'Webhook for roleplaying messages'
-          });
-        }
-
-        await webhook.send({
-          content: message,
-          username: character.name,
-          avatarURL: character.avatar_url
-        });
-
-        await interaction.editReply({ content: 'Your in-character message has been sent!' });
-
-      } catch (dbError) {
-        console.error('Error during RP command DB lookup or webhook:', dbError);
-        if (interaction.deferred || interaction.replied) {
-            return interaction.editReply({ content: '❌ An error occurred during RP command.' });
-        } else {
-            return interaction.reply({ content: '❌ An error occurred during RP command.', flags: MessageFlags.Ephemeral });
-        }
-      }
-    } else if (commandName === 'roll') {
-      const diceNotation = options.getString('dice');
-      await interaction.deferReply(); // Not ephemeral as rolls are often public
-      try {
-        const rollResult = rollDice(diceNotation);
-        await interaction.editReply({
-          content: `🎲 Rolled ${diceNotation}: [${rollResult.rolls.join(', ')}] Total: **${rollResult.total}**` +
-                   (rollResult.maxRoll ? ' (Perfect Roll!)' : '')
-        });
+        await interaction.reply({ embeds: [embed] });
       } catch (error) {
-        console.error('Error handling /roll command:', error);
-        if (interaction.deferred || interaction.replied) {
-            await interaction.editReply({ content: `❌ Error rolling dice: ${error.message}` });
+        console.error('Error creating character:', error);
+        if (error.message.includes('duplicate key value violates unique constraint "characters_user_id_name_key"')) {
+          await interaction.reply({ content: 'You already have a character with that name, or you already have a character created. Please choose a different name or delete your existing character first.', ephemeral: true });
         } else {
-            await interaction.reply({ content: `❌ Error rolling dice: ${error.message}`, flags: MessageFlags.Ephemeral });
+          await interaction.reply({ content: 'There was an error creating your character. Please try again later.', ephemeral: true });
         }
       }
-    }
+      break;
 
-    // --- /item command handler ---
-    else if (commandName === 'item') {
-        const subcommand = options.getSubcommand();
-        const userId = interaction.user.id; // For potential admin checks later
-
-        if (subcommand === 'create') {
-            // TODO: Implement admin check here if desired
-            // if (userId !== 'YOUR_DISCORD_USER_ID') {
-            //     return interaction.reply({ content: 'You do not have permission to create items.', flags: MessageFlags.Ephemeral });
-            // }
-
-            const name = options.getString('name');
-            const description = options.getString('description');
-            const type = options.getString('type');
-            const rarity = options.getString('rarity');
-            const effectDescription = options.getString('effect_description');
-            const effectDataString = options.getString('effect_data');
-            let effectData = null;
-
-            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-
-            if (effectDataString) {
-                try {
-                    effectData = JSON.parse(effectDataString);
-                } catch (e) {
-                    return interaction.editReply({ content: '❌ Invalid JSON for `effect_data`. Please ensure it\'s valid JSON (e.g., `{"hp_restore":20}`).' });
-                }
-            }
-
-            try {
-                const checkQuery = 'SELECT * FROM items WHERE name = $1;';
-                const checkResult = await pgClient.query(checkQuery, [name]);
-                if (checkResult.rows.length > 0) {
-                    return interaction.editReply({ content: `❌ An item named "${name}" already exists.` });
-                }
-
-                const insertQuery = `
-                    INSERT INTO items (name, description, item_type, rarity, effect_description, effect_data)
-                    VALUES ($1, $2, $3, $4, $5, $6);
-                `;
-                await pgClient.query(insertQuery, [name, description, type, rarity, effectDescription, effectData]);
-
-                await interaction.editReply({ content: `✅ Item "${name}" (${type}, ${rarity}) created successfully!` });
-
-            } catch (dbError) {
-                console.error('Error creating item in DB:', dbError);
-                return interaction.editReply({ content: '❌ An error occurred while creating the item.' });
-            }
-        } else if (subcommand === 'view') {
-            const name = options.getString('name');
-            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-
-            try {
-                const query = 'SELECT * FROM items WHERE name = $1;';
-                const result = await pgClient.query(query, [name]);
-                const item = result.rows[0];
-
-                if (!item) {
-                    return interaction.editReply({ content: `❌ Item "${name}" not found.` });
-                }
-
-                const itemEmbed = new EmbedBuilder()
-                    .setColor(0x00FF00)
-                    .setTitle(item.name)
-                    .setDescription(item.description || 'No description provided.')
-                    .addFields(
-                        { name: 'Type', value: item.item_type || 'N/A', inline: true },
-                        { name: 'Rarity', value: item.rarity || 'N/A', inline: true },
-                        { name: 'Effect', value: item.effect_description || 'None', inline: false }
-                    );
-
-                if (item.effect_data) {
-                    itemEmbed.addFields({ name: 'Effect Data (JSON)', value: `\`\`\`json\n${JSON.stringify(item.effect_data, null, 2)}\n\`\`\``, inline: false });
-                }
-
-                await interaction.editReply({ embeds: [itemEmbed] });
-
-            } catch (dbError) {
-                console.error('Error viewing item from DB:', dbError);
-                return interaction.editReply({ content: '❌ An error occurred while fetching item details.' });
-            }
-        } else if (subcommand === 'list') {
-            const typeFilter = options.getString('type');
-            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-
-            try {
-                let query = 'SELECT name, item_type, rarity FROM items';
-                const params = [];
-                if (typeFilter) {
-                    query += ' WHERE item_type = $1';
-                    params.push(typeFilter);
-                }
-                query += ' ORDER BY name;';
-
-                const result = await pgClient.query(query, params);
-                const items = result.rows;
-
-                if (items.length === 0) {
-                    return interaction.editReply({ content: `No items found${typeFilter ? ` for type "${typeFilter}"` : ''}.` });
-                }
-
-                const itemList = items.map(item => `- **${item.name}** (${item.item_type}, ${item.rarity})`).join('\n');
-                await interaction.editReply({ content: `**Available Items${typeFilter ? ` (${typeFilter})` : ''}:**\n${itemList}` });
-
-            } catch (dbError) {
-                console.error('Error listing items from DB:', dbError);
-                return interaction.editReply({ content: '❌ An error occurred while listing items.' });
-            }
+    case 'mycharacter':
+      try {
+        const character = await getCharacter(userId);
+        if (!character) {
+          await interaction.reply({ content: 'You don\'t have a character yet! Use `/createcharacter` to make one.', ephemeral: true });
+          return;
         }
-    }
 
-    // --- /inventory command handler ---
-    else if (commandName === 'inventory') {
-        const subcommand = options.getSubcommand();
-        const userId = interaction.user.id;
+        // Fetch character's attacks
+        const attacksRes = await pgClient.query(
+          `SELECT a.name, a.description, a.base_damage_dice
+           FROM attacks a
+           JOIN character_attacks ca ON a.id = ca.attack_id
+           WHERE ca.character_id = $1;`,
+          [character.id]
+        );
+        const characterAttacks = attacksRes.rows.map(a => `${a.name} (${a.base_damage_dice})`).join(', ') || 'None';
 
-        if (subcommand === 'view') {
-            const characterName = options.getString('character_name');
-            let character;
+        // Fetch character's inventory
+        const inventoryRes = await pgClient.query(
+          `SELECT item_name, quantity FROM character_inventory WHERE character_id = $1;`,
+          [character.id]
+        );
+        const inventoryItems = inventoryRes.rows.map(item => `${item.item_name} x${item.quantity}`).join(', ') || 'Empty';
 
-            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        // Fetch character's active status effects
+        const statusEffectsRes = await pgClient.query(
+          `SELECT status_name, duration_turns FROM character_status_effects WHERE character_id = $1;`,
+          [character.id]
+        );
+        const activeStatusEffects = statusEffectsRes.rows.map(se => `${se.status_name} (${se.duration_turns} turns left)`).join(', ') || 'None';
 
-            try {
-                if (characterName) {
-                    const query = 'SELECT id, name FROM characters WHERE user_id = $1 AND name = $2;';
-                    const result = await pgClient.query(query, [userId, characterName]);
-                    character = result.rows[0];
-                } else {
-                    const query = 'SELECT id, name, avatar_url FROM characters WHERE user_id = $1 ORDER BY id DESC LIMIT 1;'; // Fetch avatar_url
-                    const result = await pgClient.query(query, [userId]);
-                    character = result.rows[0];
-                }
+        const embed = new EmbedBuilder()
+          .setColor(0x0099FF)
+          .setTitle(`👤 ${character.name}'s Profile`)
+          .setThumbnail(character.avatar_url)
+          .addFields(
+            { name: 'Health ❤️', value: `${character.health_current}/${character.health_max}`, inline: true },
+            { name: 'Sanity 🧠', value: `${character.sanity_current}/${character.sanity_max}`, inline: true },
+            { name: 'Level ⬆️', value: character.level.toString(), inline: true },
+            { name: 'CXP ✨', value: character.cxp.toString(), inline: true },
+            { name: 'Attack Chain Max ⛓️', value: character.attack_chain_max.toString(), inline: true },
+            { name: 'Gender', value: character.gender || 'N/A', inline: true },
+            { name: 'Age', value: character.age ? character.age.toString() : 'N/A', inline: true },
+            { name: 'Species', value: character.species || 'N/A', inline: true },
+            { name: 'Occupation', value: character.occupation || 'N/A', inline: true },
+            { name: 'Known Attacks ⚔️', value: characterAttacks },
+            { name: 'Inventory 🎒', value: inventoryItems },
+            { name: 'Active Status Effects 🌡️', value: activeStatusEffects },
+            { name: 'Sanity Increase Description', value: character.sanity_increase_desc || 'N/A' },
+            { name: 'Sanity Decrease Description', value: character.sanity_decrease_desc || 'N/A' }
+          )
+          .setImage(character.appearance_url || null)
+          .setTimestamp()
+          .setFooter({ text: `Character ID: ${character.id}` });
 
-                if (!character) {
-                    return interaction.editReply({ content: `❌ Character "${characterName || 'latest'}" not found. Create one with \`/character create\`.` });
-                }
+        await interaction.reply({ embeds: [embed] });
+      } catch (error) {
+        console.error('Error fetching character:', error);
+        await interaction.reply({ content: 'There was an error fetching your character. Please try again later.', ephemeral: true });
+      }
+      break;
 
-                const inventoryQuery = `
-                    SELECT i.name, i.item_type, i.rarity, ci.quantity
-                    FROM character_items ci
-                    JOIN items i ON ci.item_id = i.id
-                    WHERE ci.character_id = $1
-                    ORDER BY i.name;
-                `;
-                const inventoryResult = await pgClient.query(inventoryQuery, [character.id]);
-                const itemsInInventory = inventoryResult.rows;
-
-                const inventoryEmbed = new EmbedBuilder()
-                    .setColor(0xFFA500)
-                    .setTitle(`${character.name}'s Inventory`)
-                    .setThumbnail(character.avatar_url || null); // Use character's avatar as thumbnail
-
-                if (itemsInInventory.length === 0) {
-                    inventoryEmbed.setDescription('Inventory is empty.');
-                } else {
-                    const itemFields = itemsInInventory.map(item =>
-                        `**${item.name}** (x${item.quantity}) - ${item.item_type} (${item.rarity})`
-                    ).join('\n');
-                    inventoryEmbed.setDescription(itemFields);
-                }
-
-                await interaction.editReply({ embeds: [inventoryEmbed] });
-
-            } catch (dbError) {
-                console.error('Error viewing inventory from DB:', dbError);
-                return interaction.editReply({ content: '❌ An error occurred while fetching the inventory.' });
-            }
-        } else if (subcommand === 'add') {
-            // TODO: Implement admin check here if desired
-            // if (userId !== 'YOUR_DISCORD_USER_ID') {
-            //     return interaction.reply({ content: 'You do not have permission to add items to inventories.', flags: MessageFlags.Ephemeral });
-            // }
-
-            const characterName = options.getString('character_name');
-            const itemName = options.getString('item_name');
-            const quantity = options.getInteger('quantity') || 1;
-
-            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-
-            try {
-                const characterQuery = 'SELECT id FROM characters WHERE user_id = $1 AND name = $2;';
-                const characterResult = await pgClient.query(characterQuery, [userId, characterName]);
-                const character = characterResult.rows[0];
-
-                if (!character) {
-                    return interaction.editReply({ content: `❌ Character "${characterName}" not found for your user ID.` });
-                }
-
-                const itemQuery = 'SELECT id FROM items WHERE name = $1;';
-                const itemResult = await pgClient.query(itemQuery, [itemName]);
-                const item = itemResult.rows[0];
-
-                if (!item) {
-                    return interaction.editReply({ content: `❌ Item "${itemName}" not found in item definitions. Use \`/item create\` first.` });
-                }
-
-                // Check if character already has the item
-                const checkInventoryQuery = 'SELECT quantity FROM character_items WHERE character_id = $1 AND item_id = $2;';
-                const checkInventoryResult = await pgClient.query(checkInventoryQuery, [character.id, item.id]);
-
-                if (checkInventoryResult.rows.length > 0) {
-                    // Update quantity if item already exists
-                    const currentQuantity = checkInventoryResult.rows[0].quantity;
-                    const newQuantity = currentQuantity + quantity;
-                    const updateQuery = 'UPDATE character_items SET quantity = $1 WHERE character_id = $2 AND item_id = $3;';
-                    await pgClient.query(updateQuery, [newQuantity, character.id, item.id]);
-                    await interaction.editReply({ content: `✅ Added ${quantity}x "${itemName}" to ${characterName}'s inventory. Total: ${newQuantity}.` });
-                } else {
-                    // Insert new entry if item not found in inventory
-                    const insertQuery = 'INSERT INTO character_items (character_id, item_id, quantity) VALUES ($1, $2, $3);';
-                    await pgClient.query(insertQuery, [character.id, item.id, quantity]);
-                    await interaction.editReply({ content: `✅ Added ${quantity}x "${itemName}" to ${characterName}'s inventory.` });
-                }
-
-            } catch (dbError) {
-                console.error('Error adding item to inventory in DB:', dbError);
-                return interaction.editReply({ content: '❌ An error occurred while adding the item to inventory.' });
-            }
+    case 'deletecharacter':
+      try {
+        const character = await getCharacter(userId);
+        if (!character) {
+          await interaction.reply({ content: 'You don\'t have a character to delete!', ephemeral: true });
+          return;
         }
-    }
 
-    // --- NEW: /battle command handler ---
-    else if (commandName === 'battle') {
-        const subcommand = options.getSubcommand();
-        const guildId = interaction.guildId;
-        const channelId = interaction.channelId;
-        const userId = interaction.user.id;
+        await pgClient.query('DELETE FROM characters WHERE user_id = $1;', [userId]);
+        await interaction.reply({ content: `Your character **${character.name}** has been deleted.`, ephemeral: false }); // Not ephemeral, so others see it
+      } catch (error) {
+        console.error('Error deleting character:', error);
+        await interaction.reply({ content: 'There was an error deleting your character. Please try again later.', ephemeral: true });
+      }
+      break;
 
-        if (subcommand === 'start') {
-            const opponentName = options.getString('opponent_name');
-            await interaction.deferReply(); // Make visible to all in channel
+    case 'roll':
+      try {
+        const diceNotation = interaction.options.getString('dice');
+        const { total, rolls, maxRoll, maxPossible } = rollDice(diceNotation);
 
-            try {
-                // 1. Check if a battle is already active in this channel
-                const activeBattleQuery = 'SELECT id FROM battles WHERE guild_id = $1 AND channel_id = $2 AND status = \'active\';';
-                const activeBattleResult = await pgClient.query(activeBattleQuery, [guildId, channelId]);
-                if (activeBattleResult.rows.length > 0) {
-                    return interaction.editReply({ content: '❌ A battle is already active in this channel. Use `/battle status` to check it or `/battle end` to force end it (admin only).' });
-                }
+        let rollMessage = `You rolled **${diceNotation}**:\n`;
+        rollMessage += `Individual rolls: [${rolls.join(', ')}]\n`;
+        rollMessage += `Total: **${total}**`;
 
-                // 2. Get the user's latest character
-                const charQuery = 'SELECT id, name, health_max, sanity_max, avatar_url FROM characters WHERE user_id = $1 ORDER BY id DESC LIMIT 1;';
-                const charResult = await pgClient.query(charQuery, [userId]);
-                const playerCharacter = charResult.rows[0];
-
-                if (!playerCharacter) {
-                    return interaction.editReply({ content: '❌ You need to create a character first with `/character create` to start a battle.' });
-                }
-
-                // 3. Get the NPC opponent
-                const npcQuery = 'SELECT id, name, health_max, sanity_max, avatar_url FROM npcs WHERE name = $1;';
-                const npcResult = await pgClient.query(npcQuery, [opponentName]);
-                const npcOpponent = npcResult.rows[0];
-
-                if (!npcOpponent) {
-                    return interaction.editReply({ content: `❌ NPC "${opponentName}" not found. Make sure the name is spelled correctly.` });
-                }
-
-                // 4. Create a new battle entry
-                const createBattleQuery = `
-                    INSERT INTO battles (guild_id, channel_id, status)
-                    VALUES ($1, $2, 'active') RETURNING id;
-                `;
-                const battleResult = await pgClient.query(createBattleQuery, [guildId, channelId]);
-                const newBattleId = battleResult.rows[0].id;
-
-                // 5. Add participants to battle_participants table
-                const addPlayerParticipantQuery = `
-                    INSERT INTO battle_participants (battle_id, character_id, current_health, current_sanity, is_player)
-                    VALUES ($1, $2, $3, $4, TRUE) RETURNING id;
-                `;
-                const playerParticipantResult = await pgClient.query(addPlayerParticipantQuery, [newBattleId, playerCharacter.id, playerCharacter.health_max, playerCharacter.sanity_max]);
-                const playerParticipantId = playerParticipantResult.rows[0].id;
-
-                const addNpcParticipantQuery = `
-                    INSERT INTO battle_participants (battle_id, npc_id, current_health, current_sanity, is_player)
-                    VALUES ($1, $2, $3, $4, FALSE) RETURNING id;
-                `;
-                const npcParticipantResult = await pgClient.query(addNpcParticipantQuery, [newBattleId, npcOpponent.id, npcOpponent.health_max, npcOpponent.sanity_max]);
-                const npcParticipantId = npcParticipantResult.rows[0].id;
-
-                // 6. Determine turn order and set current_turn_participant_id (for now, player goes first)
-                const turnOrder = [
-                    { type: 'character', id: playerParticipantId },
-                    { type: 'npc', id: npcParticipantId }
-                ];
-                await pgClient.query(
-                    'UPDATE battles SET turn_order = $1, current_turn_participant_id = $2 WHERE id = $3;',
-                    [JSON.stringify(turnOrder), playerParticipantId, newBattleId]
-                );
-
-                const battleEmbed = new EmbedBuilder()
-                    .setColor(0xFF0000)
-                    .setTitle('⚔️ Battle Started! ⚔️')
-                    .setDescription(`**${playerCharacter.name}** vs. **${npcOpponent.name}**`)
-                    .addFields(
-                        { name: 'Your Character', value: `${playerCharacter.name} (HP: ${playerCharacter.health_max}, SP: ${playerCharacter.sanity_max})`, inline: true },
-                        { name: 'Opponent', value: `${npcOpponent.name} (HP: ${npcOpponent.health_max}, SP: ${npcOpponent.sanity_max})`, inline: true },
-                        { name: 'Current Turn', value: currentTurnName, inline: false }
-                    )
-                    .setThumbnail(playerCharacter.avatar_url || null)
-                    .setImage(npcOpponent.avatar_url || null)
-                    .setFooter({ text: `Battle ID: ${newBattleId}` })
-                    .setTimestamp();
-
-                await interaction.editReply({ embeds: [battleEmbed] });
-
-            } catch (dbError) {
-                console.error('Error starting battle in DB:', dbError);
-                return interaction.editReply({ content: '❌ An error occurred while trying to start the battle.' });
-            }
-        } else if (subcommand === 'status') {
-            await interaction.deferReply(); // Visible to all
-
-            try {
-                const battleQuery = `
-                    SELECT
-                        b.id AS battle_id, b.status, b.round_number, b.turn_order, b.current_turn_participant_id,
-                        bp.id AS participant_id, bp.is_player, bp.current_health, bp.current_sanity,
-                        COALESCE(c.name, n.name) AS participant_name,
-                        COALESCE(c.avatar_url, n.avatar_url) AS participant_avatar_url,
-                        COALESCE(c.health_max, n.health_max) AS max_health,
-                        COALESCE(c.sanity_max, n.sanity_max) AS max_sanity
-                    FROM battles b
-                    JOIN battle_participants bp ON b.id = bp.battle_id
-                    LEFT JOIN characters c ON bp.character_id = c.id
-                    LEFT JOIN npcs n ON bp.npc_id = n.id
-                    WHERE b.guild_id = $1 AND b.channel_id = $2 AND b.status = 'active'
-                    ORDER BY bp.is_player DESC, participant_name; -- Players first, then NPCs
-                `;
-                const battleResult = await pgClient.query(battleQuery, [guildId, channelId]);
-
-                if (battleResult.rows.length === 0) {
-                    return interaction.editReply({ content: 'No active battle found in this channel. Use `/battle start` to begin one!' });
-                }
-
-                const battle = battleResult.rows[0]; // First row has battle details
-                const participants = battleResult.rows;
-
-                let playerStatus = '';
-                let npcStatus = '';
-                let currentTurnName = 'Unknown';
-                let currentTurnAvatar = null;
-
-                for (const p of participants) {
-                    const statusLine = `**${p.participant_name}** (HP: ${p.current_health}/${p.max_health}, SP: ${p.current_sanity}/${p.max_sanity})`;
-                    if (p.is_player) {
-                        playerStatus += statusLine + '\n';
-                    } else {
-                        npcStatus += statusLine + '\n';
-                    }
-
-                    if (p.participant_id === battle.current_turn_participant_id) {
-                        currentTurnName = p.participant_name;
-                        currentTurnAvatar = p.participant_avatar_url;
-                    }
-                }
-
-                const statusEmbed = new EmbedBuilder()
-                    .setColor(0x00FFFF)
-                    .setTitle('Current Battle Status 📊')
-                    .setDescription(`**Round ${battle.round_number}**`)
-                    .addFields(
-                        { name: 'Current Turn', value: currentTurnName, inline: false },
-                        { name: 'Your Character(s)', value: playerStatus || 'None', inline: true },
-                        { name: 'Opponent(s)', value: npcStatus || 'None', inline: true }
-                    )
-                    .setThumbnail(currentTurnAvatar || null)
-                    .setFooter({ text: `Battle ID: ${battle.battle_id}` })
-                    .setTimestamp();
-
-                await interaction.editReply({ embeds: [statusEmbed] });
-
-            } catch (dbError) {
-                console.error('Error fetching battle status from DB:', dbError);
-                return interaction.editReply({ content: '❌ An error occurred while fetching battle status.' });
-            }
-        } else if (subcommand === 'end') {
-            // TODO: Implement admin check
-            // if (userId !== 'YOUR_DISCORD_USER_ID') {
-            //     return interaction.reply({ content: 'You do not have permission to end battles.', flags: MessageFlags.Ephemeral });
-            // }
-            await interaction.deferReply();
-
-            try {
-                const query = 'UPDATE battles SET status = \'ended\' WHERE guild_id = $1 AND channel_id = $2 AND status = \'active\' RETURNING id;';
-                const result = await pgClient.query(query, [guildId, channelId]);
-
-                if (result.rowCount === 0) {
-                    return interaction.editReply({ content: '❌ No active battle found in this channel to end.' });
-                }
-
-                await interaction.editReply({ content: '✅ Battle successfully ended!' });
-            } catch (dbError) {
-                console.error('Error ending battle in DB:', dbError);
-                return interaction.editReply({ content: '❌ An error occurred while trying to end the battle.' });
-            }
+        if (maxRoll) {
+          rollMessage += ` ✨ (Perfect Roll! Max possible: ${maxPossible})`;
+        } else if (total === 1 && diceNotation.includes('d1')) { // Special case for 1d1 rolls
+          rollMessage += ` (As expected!)`;
+        } else if (total === maxPossible) { // If total is max possible, but not all individual dice were max (e.g., 1d4+3, roll 1, total 4)
+          rollMessage += ` (Max total achieved!)`;
+        } else if (total === 1 && !diceNotation.includes('+')) { // If total is 1 and no modifier
+          rollMessage += ` (Critical Fail! 💀)`;
         }
-    }
 
-  } catch (error) {
-    console.error(`Error executing ${commandName}:`, error);
-    if (interaction.replied || interaction.deferred) {
-        await interaction.followUp({ content: '❌ An unexpected error occurred while executing this command.', flags: MessageFlags.Ephemeral });
-    } else {
-        await interaction.reply({ content: '❌ An unexpected error occurred while executing this command.', flags: MessageFlags.Ephemeral });
-    }
+        await interaction.reply(rollMessage);
+      } catch (error) {
+        console.error('Error rolling dice:', error);
+        await interaction.reply({ content: `Error: ${error.message}`, ephemeral: true });
+      }
+      break;
+
+    case 'attack':
+      try {
+        const character = await getCharacter(userId);
+        if (!character) {
+          await interaction.reply({ content: 'You need a character to attack! Use `/createcharacter` to make one.', ephemeral: true });
+          return;
+        }
+
+        const attackName = interaction.options.getString('attack_name');
+        const targetUser = interaction.options.getUser('target'); // Get the target user object
+
+        // Fetch the attack details
+        const attackRes = await pgClient.query(
+          `SELECT a.*, aff.name as affinity_name
+           FROM attacks a
+           LEFT JOIN affinities aff ON a.affinity_id = aff.id
+           WHERE a.name ILIKE $1;`,
+          [attackName]
+        );
+        const attack = attackRes.rows[0];
+
+        if (!attack) {
+          await interaction.reply({ content: `Attack "${attackName}" not found.`, ephemeral: true });
+          return;
+        }
+
+        // Check if character knows this attack (optional, based on game design)
+        const knowsAttackRes = await pgClient.query(
+          `SELECT 1 FROM character_attacks WHERE character_id = $1 AND attack_id = $2;`,
+          [character.id, attack.id]
+        );
+        if (knowsAttackRes.rows.length === 0) {
+          await interaction.reply({ content: `Your character doesn't know the attack "${attackName}". Use \`/addattack\` to learn it.`, ephemeral: true });
+          return;
+        }
+
+        // Check sanity/health costs
+        if (character.sanity_current < attack.sanity_cost) {
+          await interaction.reply({ content: `You don't have enough sanity (${attack.sanity_cost} needed) to use ${attack.name}!`, ephemeral: true });
+          return;
+        }
+        if (character.health_current < attack.health_cost) {
+          await interaction.reply({ content: `You don't have enough health (${attack.health_cost} needed) to use ${attack.name}!`, ephemeral: true });
+          return;
+        }
+
+        // Deduct costs
+        await updateCharacterStats(character.id, -attack.health_cost, -attack.sanity_cost);
+
+        // Calculate actual damage dice based on character level
+        const actualDamageDice = calculateDamageDice(attack.base_damage_dice, character.level);
+        const { total: damageDealt, rolls } = rollDice(actualDamageDice);
+
+        let replyMessage = `**${character.name}** used **${attack.name}**! (Cost: ${attack.health_cost} HP, ${attack.sanity_cost} SP)\n`;
+        replyMessage += `Rolled ${actualDamageDice}: [${rolls.join(', ')}] for **${damageDealt}** ${attack.damage_type} damage.`;
+
+        // Handle target if provided
+        if (targetUser) {
+          const targetCharacter = await getCharacter(targetUser.id);
+          if (targetCharacter) {
+            // Apply damage to target
+            const { newHealth, newSanity } = await updateCharacterStats(targetCharacter.id, -damageDealt, attack.damage_type === 'sanity' ? -damageDealt : 0);
+            replyMessage += `\n**${targetCharacter.name}** took **${damageDealt}** damage! Their health is now ${newHealth}/${targetCharacter.health_max}.`;
+
+            // Apply status effect if attack has one
+            if (attack.affinity_id && attack.affinity_name) {
+              const affinityRes = await pgClient.query('SELECT * FROM affinities WHERE id = $1', [attack.affinity_id]);
+              const affinity = affinityRes.rows[0];
+              if (affinity && affinity.inflicted_status) {
+                await manageStatusEffect(targetCharacter.id, affinity.inflicted_status, affinity.effect_value.duration_turns, affinity.effect_value);
+                replyMessage += `\n**${targetCharacter.name}** is now **${affinity.inflicted_status}** for ${affinity.effect_value.duration_turns} turns!`;
+              }
+            }
+
+            // Check if target is defeated
+            if (newHealth <= 0) {
+              replyMessage += `\n**${targetCharacter.name}** has been defeated!`;
+              // Potentially add logic for character defeat (e.g., reset health, temporary disable)
+            }
+          } else {
+            replyMessage += `\n(Target user **${targetUser.username}** does not have a character.)`;
+          }
+        } else {
+          replyMessage += `\n(No specific target, damage dealt to an imaginary foe or for testing.)`;
+        }
+
+        await interaction.reply(replyMessage);
+      } catch (error) {
+        console.error('Error performing attack:', error);
+        await interaction.reply({ content: 'There was an error performing the attack. Please try again later.', ephemeral: true });
+      }
+      break;
+
+    case 'addattack':
+      try {
+        const character = await getCharacter(userId);
+        if (!character) {
+          await interaction.reply({ content: 'You need a character to add attacks to! Use `/createcharacter` to make one.', ephemeral: true });
+          return;
+        }
+
+        const attackName = interaction.options.getString('attack_name');
+
+        // Find the attack in the attacks table
+        const attackRes = await pgClient.query('SELECT id, name FROM attacks WHERE name ILIKE $1;', [attackName]);
+        const attack = attackRes.rows[0];
+
+        if (!attack) {
+          await interaction.reply({ content: `Attack "${attackName}" not found in the available attacks.`, ephemeral: true });
+          return;
+        }
+
+        // Check if character already knows this attack
+        const knowsAttackRes = await pgClient.query(
+          `SELECT 1 FROM character_attacks WHERE character_id = $1 AND attack_id = $2;`,
+          [character.id, attack.id]
+        );
+        if (knowsAttackRes.rows.length > 0) {
+          await interaction.reply({ content: `Your character already knows the attack "${attack.name}".`, ephemeral: true });
+          return;
+        }
+
+        // Add the attack to the character_attacks join table
+        await pgClient.query(
+          `INSERT INTO character_attacks (character_id, attack_id) VALUES ($1, $2);`,
+          [character.id, attack.id]
+        );
+
+        await interaction.reply({ content: `**${character.name}** has learned the attack **${attack.name}**!`, ephemeral: false });
+      } catch (error) {
+        console.error('Error adding attack:', error);
+        await interaction.reply({ content: 'There was an error adding the attack. Please try again later.', ephemeral: true });
+      }
+      break;
+
+    case 'removeattack':
+      try {
+        const character = await getCharacter(userId);
+        if (!character) {
+          await interaction.reply({ content: 'You need a character to remove attacks from!', ephemeral: true });
+          return;
+        }
+
+        const attackName = interaction.options.getString('attack_name');
+
+        // Find the attack in the attacks table
+        const attackRes = await pgClient.query('SELECT id, name FROM attacks WHERE name ILIKE $1;', [attackName]);
+        const attack = attackRes.rows[0];
+
+        if (!attack) {
+          await interaction.reply({ content: `Attack "${attackName}" not found.`, ephemeral: true });
+          return;
+        }
+
+        // Check if character actually knows this attack
+        const knowsAttackRes = await pgClient.query(
+          `SELECT 1 FROM character_attacks WHERE character_id = $1 AND attack_id = $2;`,
+          [character.id, attack.id]
+        );
+        if (knowsAttackRes.rows.length === 0) {
+          await interaction.reply({ content: `Your character doesn't know the attack "${attack.name}".`, ephemeral: true });
+          return;
+        }
+
+        // Remove the attack from the character_attacks join table
+        await pgClient.query(
+          `DELETE FROM character_attacks WHERE character_id = $1 AND attack_id = $2;`,
+          [character.id, attack.id]
+        );
+
+        await interaction.reply({ content: `**${character.name}** has forgotten the attack **${attack.name}**.`, ephemeral: false });
+      } catch (error) {
+        console.error('Error removing attack:', error);
+        await interaction.reply({ content: 'There was an error removing the attack. Please try again later.', ephemeral: true });
+      }
+      break;
+
+    case 'additem':
+      try {
+        const character = await getCharacter(userId);
+        if (!character) {
+          await interaction.reply({ content: 'You need a character to add items to! Use `/createcharacter` to make one.', ephemeral: true });
+          return;
+        }
+
+        const itemName = interaction.options.getString('item_name');
+        const quantity = interaction.options.getInteger('quantity') || 1;
+
+        if (quantity <= 0) {
+          await interaction.reply({ content: 'Quantity must be a positive number.', ephemeral: true });
+          return;
+        }
+
+        await pgClient.query(
+          `INSERT INTO character_inventory (character_id, item_name, quantity)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (character_id, item_name) DO UPDATE SET quantity = character_inventory.quantity + EXCLUDED.quantity;`,
+          [character.id, itemName, quantity]
+        );
+
+        await interaction.reply({ content: `Added **${quantity}x ${itemName}** to **${character.name}**'s inventory.`, ephemeral: false });
+      } catch (error) {
+        console.error('Error adding item:', error);
+        await interaction.reply({ content: 'There was an error adding the item. Please try again later.', ephemeral: true });
+      }
+      break;
+
+    case 'removeitem':
+      try {
+        const character = await getCharacter(userId);
+        if (!character) {
+          await interaction.reply({ content: 'You need a character to remove items from!', ephemeral: true });
+          return;
+        }
+
+        const itemName = interaction.options.getString('item_name');
+        const quantityToRemove = interaction.options.getInteger('quantity') || 1;
+
+        if (quantityToRemove <= 0) {
+          await interaction.reply({ content: 'Quantity to remove must be a positive number.', ephemeral: true });
+          return;
+        }
+
+        const itemRes = await pgClient.query(
+          `SELECT quantity FROM character_inventory WHERE character_id = $1 AND item_name ILIKE $2;`,
+          [character.id, itemName]
+        );
+        const existingItem = itemRes.rows[0];
+
+        if (!existingItem) {
+          await interaction.reply({ content: `**${character.name}** does not have "${itemName}" in their inventory.`, ephemeral: true });
+          return;
+        }
+
+        if (existingItem.quantity <= quantityToRemove) {
+          // Remove the item entirely if quantity is less than or equal to quantityToRemove
+          await pgClient.query(
+            `DELETE FROM character_inventory WHERE character_id = $1 AND item_name ILIKE $2;`,
+            [character.id, itemName]
+          );
+          await interaction.reply({ content: `Removed all **${existingItem.quantity}x ${itemName}** from **${character.name}**'s inventory.`, ephemeral: false });
+        } else {
+          // Decrease quantity
+          await pgClient.query(
+            `UPDATE character_inventory SET quantity = quantity - $1 WHERE character_id = $2 AND item_name ILIKE $3;`,
+            [quantityToRemove, character.id, itemName]
+          );
+          await interaction.reply({ content: `Removed **${quantityToRemove}x ${itemName}** from **${character.name}**'s inventory.`, ephemeral: false });
+        }
+      } catch (error) {
+        console.error('Error removing item:', error);
+        await interaction.reply({ content: 'There was an error removing the item. Please try again later.', ephemeral: true });
+      }
+      break;
+
+    case 'inventory':
+      try {
+        const character = await getCharacter(userId);
+        if (!character) {
+          await interaction.reply({ content: 'You need a character to check inventory! Use `/createcharacter` to make one.', ephemeral: true });
+          return;
+        }
+
+        const inventoryRes = await pgClient.query(
+          `SELECT item_name, quantity FROM character_inventory WHERE character_id = $1 ORDER BY item_name;`,
+          [character.id]
+        );
+
+        if (inventoryRes.rows.length === 0) {
+          await interaction.reply({ content: `**${character.name}**'s inventory is empty.`, ephemeral: true });
+          return;
+        }
+
+        const inventoryList = inventoryRes.rows.map(item => `- ${item.item_name} x${item.quantity}`).join('\n');
+        const embed = new EmbedBuilder()
+          .setColor(0x0099FF)
+          .setTitle(`🎒 ${character.name}'s Inventory`)
+          .setDescription(inventoryList)
+          .setTimestamp();
+
+        await interaction.reply({ embeds: [embed] });
+      } catch (error) {
+        console.error('Error fetching inventory:', error);
+        await interaction.reply({ content: 'There was an error fetching your inventory. Please try again later.', ephemeral: true });
+      }
+      break;
+
+    case 'heal':
+      try {
+        const character = await getCharacter(userId);
+        if (!character) {
+          await interaction.reply({ content: 'You need a character to heal! Use `/createcharacter` to make one.', ephemeral: true });
+          return;
+        }
+
+        const amount = interaction.options.getInteger('amount');
+        if (amount <= 0) {
+          await interaction.reply({ content: 'Healing amount must be a positive number.', ephemeral: true });
+          return;
+        }
+
+        const { newHealth } = await updateCharacterStats(character.id, amount, 0);
+        await interaction.reply({ content: `**${character.name}** healed for **${amount}** health! Current Health: **${newHealth}/${character.health_max}**`, ephemeral: false });
+      } catch (error) {
+        console.error('Error healing character:', error);
+        await interaction.reply({ content: 'There was an error healing your character. Please try again later.', ephemeral: true });
+      }
+      break;
+
+    case 'recover_sanity':
+      try {
+        const character = await getCharacter(userId);
+        if (!character) {
+          await interaction.reply({ content: 'You need a character to recover sanity! Use `/createcharacter` to make one.', ephemeral: true });
+          return;
+        }
+
+        const amount = interaction.options.getInteger('amount');
+        if (amount <= 0) {
+          await interaction.reply({ content: 'Sanity recovery amount must be a positive number.', ephemeral: true });
+          return;
+        }
+
+        const { newSanity } = await updateCharacterStats(character.id, 0, amount);
+        let replyMessage = `**${character.name}** recovered **${amount}** sanity! Current Sanity: **${newSanity}/${character.sanity_max}**`;
+
+        if (character.sanity_increase_desc) {
+          replyMessage += `\n*${character.sanity_increase_desc}*`;
+        }
+
+        await interaction.reply({ content: replyMessage, ephemeral: false });
+      } catch (error) {
+        console.error('Error recovering sanity:', error);
+        await interaction.reply({ content: 'There was an error recovering your sanity. Please try again later.', ephemeral: true });
+      }
+      break;
+
+    case 'set_sanity_desc':
+      try {
+        const character = await getCharacter(userId);
+        if (!character) {
+          await interaction.reply({ content: 'You need a character to set sanity descriptions for! Use `/createcharacter` to make one.', ephemeral: true });
+          return;
+        }
+
+        const type = interaction.options.getString('type');
+        const description = interaction.options.getString('description');
+
+        let queryField;
+        if (type === 'increase') {
+          queryField = 'sanity_increase_desc';
+        } else if (type === 'decrease') {
+          queryField = 'sanity_decrease_desc';
+        } else {
+          await interaction.reply({ content: 'Invalid type. Please choose "increase" or "decrease".', ephemeral: true });
+          return;
+        }
+
+        await pgClient.query(
+          `UPDATE characters SET ${queryField} = $1 WHERE id = $2;`,
+          [description, character.id]
+        );
+
+        await interaction.reply({ content: `Sanity ${type} description for **${character.name}** set to: "${description}"`, ephemeral: false });
+      } catch (error) {
+        console.error('Error setting sanity description:', error);
+        await interaction.reply({ content: 'There was an error setting the sanity description. Please try again later.', ephemeral: true });
+      }
+      break;
+
+    case 'level_up':
+      try {
+        const character = await getCharacter(userId);
+        if (!character) {
+          await interaction.reply({ content: 'You need a character to level up! Use `/createcharacter` to make one.', ephemeral: true });
+          return;
+        }
+
+        const levelsToAdd = interaction.options.getInteger('levels');
+        if (levelsToAdd <= 0) {
+          await interaction.reply({ content: 'Number of levels must be a positive number.', ephemeral: true });
+          return;
+        }
+
+        const newLevel = character.level + levelsToAdd;
+        // Example: Increase max health and sanity on level up
+        const newMaxHealth = character.health_max + (levelsToAdd * 10);
+        const newMaxSanity = character.sanity_max + (levelsToAdd * 5);
+
+        await pgClient.query(
+          `UPDATE characters SET level = $1, health_max = $2, sanity_max = $3 WHERE id = $4;`,
+          [newLevel, newMaxHealth, newMaxSanity, character.id]
+        );
+
+        // Also heal to new max health/sanity on level up
+        await updateCharacterStats(character.id, newMaxHealth, newMaxSanity);
+
+        await interaction.reply({ content: `**${character.name}** leveled up to **Level ${newLevel}**! Max Health: ${newMaxHealth}, Max Sanity: ${newMaxSanity}`, ephemeral: false });
+      } catch (error) {
+        console.error('Error leveling up character:', error);
+        await interaction.reply({ content: 'There was an error leveling up your character. Please try again later.', ephemeral: true });
+      }
+      break;
+
+    case 'give_cxp':
+      try {
+        const character = await getCharacter(userId);
+        if (!character) {
+          await interaction.reply({ content: 'You need a character to give CXP to! Use `/createcharacter` to make one.', ephemeral: true });
+          return;
+        }
+
+        const amount = interaction.options.getInteger('amount');
+        if (amount <= 0) {
+          await interaction.reply({ content: 'CXP amount must be a positive number.', ephemeral: true });
+          return;
+        }
+
+        const newCxp = character.cxp + amount;
+        await pgClient.query(
+          `UPDATE characters SET cxp = $1 WHERE id = $2;`,
+          [newCxp, character.id]
+        );
+
+        await interaction.reply({ content: `**${character.name}** gained **${amount} CXP**! Total CXP: **${newCxp}**`, ephemeral: false });
+      } catch (error) {
+        console.error('Error giving CXP:', error);
+        await interaction.reply({ content: 'There was an error giving CXP. Please try again later.', ephemeral: true });
+      }
+      break;
+
+    case 'set_attack_chain_max':
+      try {
+        const character = await getCharacter(userId);
+        if (!character) {
+          await interaction.reply({ content: 'You need a character to set attack chain max for! Use `/createcharacter` to make one.', ephemeral: true });
+          return;
+        }
+
+        const maxChain = interaction.options.getInteger('max_chain');
+        if (maxChain <= 0) {
+          await interaction.reply({ content: 'Max attack chain must be a positive number.', ephemeral: true });
+          return;
+        }
+
+        await pgClient.query(
+          `UPDATE characters SET attack_chain_max = $1 WHERE id = $2;`,
+          [maxChain, character.id]
+        );
+
+        await interaction.reply({ content: `**${character.name}**'s maximum attack chain set to **${maxChain}**!`, ephemeral: false });
+      } catch (error) {
+        console.error('Error setting attack chain max:', error);
+        await interaction.reply({ content: 'There was an error setting the attack chain max. Please try again later.', ephemeral: true });
+      }
+      break;
+
+    default:
+      await interaction.reply({ content: 'Unknown command.', ephemeral: true });
+      break;
   }
 });
 
-// Login
-client.login(process.env.DISCORD_TOKEN)
-  .catch(err => console.error('❌ Login failed:', err));
+// Log in to Discord with your client's token
+client.login(process.env.DISCORD_TOKEN);
