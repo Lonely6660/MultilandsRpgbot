@@ -244,54 +244,6 @@ pgClient.connect()
       return map;
     }, {});
 
-    const defaultAttacks = [
-      {
-        name: 'Night Weaver\'s Grasp',
-        type: 'Magic',
-        affinity: 'Lust',
-        description: 'Summons shadowy tendrils to ensnare a target.',
-        base_damage_dice: '1d4',
-        effect_description: 'On hit, the target is inflicted with Slowed (reduces the target\'s speed by 1 for 2 turns) and reduces the target\'s sanity by 1.',
-        is_locked_default: false
-      },
-      {
-        name: 'Overfluxing Blinkboot',
-        type: 'Magic',
-        affinity: 'Lust',
-        description: 'Teleports a short distance, allowing him to reposition.',
-        base_damage_dice: '1d8',
-        effect_description: 'On hit, the target is inflicted with Weakness (reduces the target\'s attack roll by 1 for 2 turns).',
-        is_locked_default: true // This attack is locked by default
-      },
-      {
-        name: 'Waving Wrath',
-        type: 'Magic',
-        affinity: 'Lust',
-        description: 'Launches a wave of shadowy energy that divides into telegraphed Evil souls.',
-        base_damage_dice: '1d4',
-        effect_description: 'On hit, the target is inflicted with Weakness and Blindness for 2 turns.',
-        is_locked_default: true // This attack is locked by default
-      }
-    ];
-
-    for (const attack of defaultAttacks) {
-      try {
-        const typeId = attackTypesMap[attack.type];
-        const affinityId = affinitiesMap[attack.affinity];
-        if (!typeId || !affinityId) {
-          console.error(`Missing ID for attack type ${attack.type} or affinity ${attack.affinity} for attack ${attack.name}.`);
-          continue;
-        }
-        await pgClient.query(
-          'INSERT INTO attacks (name, type_id, affinity_id, description, base_damage_dice, effect_description, is_locked_default) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (name) DO NOTHING;',
-          [attack.name, typeId, affinityId, attack.description, attack.base_damage_dice, attack.effect_description, attack.is_locked_default]
-        );
-      } catch (err) {
-        console.error(`Error inserting attack ${attack.name}:`, err);
-      }
-    }
-    console.log('📝 Default attacks ensured.');
-
     // --- Ensure 'character_attacks' table (links characters to their attacks) ---
     const createCharacterAttacksTableQuery = `
       CREATE TABLE IF NOT EXISTS character_attacks (
@@ -379,8 +331,8 @@ pgClient.connect()
         level: 20, base_damage_dice: '4d12+10', attack_chain_max: 3,
         sanity_decrease_desc: 'about_blank.',
         is_boss: true, rarity: 'Boss'
-      }
-        {
+      },
+     {
         name: 'Wingslompson',
         description: 'eldsnackldson brother',
         avatar_url: 'https://i.imgur.com/exampleSpider.png', // Replace with a real URL
