@@ -417,6 +417,32 @@ client.once('ready', async () => {
   }
 });
 
+// --- GLOBAL ERROR HANDLERS ---
+process.on('unhandledRejection', error => {
+  console.error('❌ Unhandled promise rejection:', error);
+  // Optional: Perform graceful shutdown or notify
+});
+
+process.on('uncaughtException', error => {
+  console.error('❌ Uncaught exception:', error);
+  // This is a synchronous error that wasn't caught.
+  // It's critical to handle these, but after logging,
+  // the process might be in an unstable state.
+  // Optional: Perform graceful shutdown
+  process.exit(1); // Exit with a failure code
+});
+
+// Discord.js client error handling
+client.on('error', err => {
+    console.error('❌ Discord.js Client Error:', err);
+});
+
+client.on('shardError', err => {
+    console.error('❌ Discord.js Shard Error:', err);
+});
+// --- END GLOBAL ERROR HANDLERS ---
+
+
 client.on('interactionCreate', async interaction => {
   if (!interaction.isCommand()) return;
 
@@ -683,7 +709,5 @@ client.on('interactionCreate', async interaction => {
 });
 
 // Login
-client.login(process.env.DISCORD_TOKEN)
-  .catch(err => console.error('❌ Login failed:', err));
 client.login(process.env.DISCORD_TOKEN)
   .catch(err => console.error('❌ Login failed:', err));
