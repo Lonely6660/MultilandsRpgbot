@@ -33,6 +33,10 @@ let pgClient = new PgClient({
 
 async function connectPgClient() {
   try {
+    if (pgClient._connected) {
+      console.log('PostgreSQL client already connected.');
+      return;
+    }
     await pgClient.connect();
     console.log('✅ PostgreSQL Connected');
   } catch (err) {
@@ -1542,7 +1546,14 @@ client.on('interactionCreate', async interaction => {
         )
         .setTimestamp();
 
-      await interaction.editReply({ embeds: [embed] });
+      try {
+        await interaction.editReply({ embeds: [embed] });
+      } catch (err) {
+        console.error('Error editing reply:', err);
+        if (!interaction.replied) {
+          await interaction.reply({ content: '❌ An error occurred while sending the attack result.', flags: MessageFlags.Ephemeral });
+        }
+      }
     }
   } catch (error) {
     console.error(`Error executing ${commandName}:`, error);
