@@ -23,11 +23,41 @@ const client = new Client({
   ]
 });
 
-// PostgreSQL Client Setup
-const pgClient = new PgClient({
+// PostgreSQL Client Setup with reconnect logic
+let pgClient = new PgClient({
   connectionString: process.env.NEON_POSTGRES_URI,
   ssl: {
     rejectUnauthorized: false // Required for Neon to connect from Codespaces if not using certificates
+  }
+});
+
+async function connectPgClient() {
+  try {
+    await pgClient.connect();
+    console.log('✅ PostgreSQL Connected');
+  } catch (err) {
+    console.error('❌ PostgreSQL Connection Error:', err);
+    setTimeout(() => {
+      pgClient = new PgClient({
+        connectionString: process.env.NEON_POSTGRES_URI,
+        ssl: { rejectUnauthorized: false }
+      });
+      connectPgClient();
+    }, 5000);
+  }
+}
+connectPgClient();
+
+pgClient.on('error', err => {
+  console.error('❌ PostgreSQL Client Error (Caught by Listener):', err);
+  if (err.code === 'ECONNRESET' || err.message.includes('Connection terminated unexpectedly')) {
+    console.log('Attempting to reconnect to PostgreSQL...');
+    pgClient.end().catch(() => {});
+    pgClient = new PgClient({
+      connectionString: process.env.NEON_POSTGRES_URI,
+      ssl: { rejectUnauthorized: false }
+    });
+    connectPgClient();
   }
 });
 
@@ -1388,6 +1418,138 @@ client.on('interactionCreate', async interaction => {
         await interaction.followUp({ content: '❌ An unexpected error occurred while executing this command.', flags: MessageFlags.Ephemeral });
     } else {
         await interaction.reply({ content: '❌ An unexpected error occurred while executing this command.', flags: MessageFlags.Ephemeral });
+    }
+  }
+});
+
+  
+// New message listener for auto RP feature
+client.on('messageCreate', async message => {
+  if (message.author.bot) return;
+  if (message.channel.type !== 0) return; // Only text channels
+
+  try {
+    const userId = message.author.id;
+    const query = 'SELECT name, avatar_url FROM characters WHERE user_id = $1 ORDER BY id DESC LIMIT 1;';
+    const result = await pgClient.query(query, [userId]);
+    const character = result.rows[0];
+    if (!character) return;
+
+    if (!message.channel.permissionsFor(client.user).has(['ManageWebhooks', 'SendMessages'])) return;
+
+    const webhooks = await message.channel.fetchWebhooks();
+    let webhook = webhooks.find(w => w.owner.id === client.user.id && w.name === 'Auto RP Webhook');
+
+    if (!webhook) {
+      webhook = await message.channel.createWebhook({
+        name: 'Auto RP Webhook',
+        avatar: client.user.displayAvatarURL(),
+        reason: 'Webhook for auto RP messages'
+      });
+    }
+
+    await webhook.send({
+      content: message.content,
+      username: character.name,
+      avatarURL: character.avatar_url
+    });
+
+    await message.delete();
+
+  } catch (err) {
+    console.error('Error in auto RP message handler:', err);
+  }
+});
+
+// New /attack command handler inside interactionCreate event
+client.on('interactionCreate', async interaction => {
+  if (!interaction.isCommand()) return;
+
+  const { commandName, options } = interaction;
+
+  try {
+    if (commandName === 'attack' || (commandName === 'battle' && options.getSubcommand() === 'action')) {
+      await interaction.deferReply();
+
+      const userId = interaction.user.id;
+
+      const charQuery = 'SELECT id, name, level FROM characters WHERE user_id = $1 ORDER BY id DESC LIMIT 1;';
+      const charResult = await pgClient.query(charQuery, [userId]);
+      const character = charResult.rows[0];
+      if (!character) {
+        return interaction.editReply('❌ You need to create a character first with `/character create` to attack.');
+      }
+
+      const attacksQuery = `
+        SELECT a.id, a.name, a.base_damage_dice, ca.level AS attack_level
+        FROM character_attacks ca
+        JOIN attacks a ON ca.attack_id = a.id
+        WHERE ca.character_id = $1 AND ca.is_unlocked = TRUE;
+      `;
+      const attacksResult = await pgClient.query(attacksQuery, [character.id]);
+      const attacks = attacksResult.rows;
+
+      if (attacks.length === 0) {
+        return interaction.editReply('❌ Your character has no unlocked attacks to use.');
+      }
+
+      const attack = attacks[0];
+
+      const hitRoll = rollDice('1d20');
+      let hitResult = '';
+      let levelUp = false;
+      if (hitRoll.total < 10) {
+        hitResult = 'Missed the attack!';
+      } else if (hitRoll.total === 20) {
+        hitResult = 'Critical hit! You level up your attack and hit!';
+        levelUp = true;
+      } else {
+        hitResult = 'Hit the attack!';
+      }
+
+      const damageRoll = rollDice('1d4');
+      let damageQuality = '';
+      switch (damageRoll.total) {
+        case 4:
+          damageQuality = 'Perfect hit!';
+          break;
+        case 3:
+          damageQuality = 'Great hit!';
+          break;
+        case 2:
+          damageQuality = 'Good hit!';
+          break;
+        case 1:
+          damageQuality = 'Enemy deflected the attack!';
+          break;
+      }
+
+      if (levelUp) {
+        const updateLevelQuery = `
+          UPDATE character_attacks
+          SET level = level + 1
+          WHERE character_id = $1 AND attack_id = $2;
+        `;
+        await pgClient.query(updateLevelQuery, [character.id, attack.id]);
+      }
+
+      const embed = new EmbedBuilder()
+        .setTitle(`${character.name} uses ${attack.name}!`)
+        .addFields(
+          { name: 'Hit Roll (1d20)', value: `${hitRoll.total} - ${hitResult}`, inline: true },
+          { name: 'Damage Roll (1d4)', value: `${damageRoll.total} - ${damageQuality}`, inline: true },
+          { name: 'Attack Level', value: `${attack.attack_level}${levelUp ? ' (Leveled Up!)' : ''}`, inline: true }
+        )
+        .setTimestamp();
+
+      await interaction.editReply({ embeds: [embed] });
+    }
+  } catch (error) {
+    console.error(`Error executing ${commandName}:`, error);
+    if (interaction.replied || interaction.deferred) {
+      await interaction.followUp({ content: '❌ An unexpected error occurred while executing this command.', flags: MessageFlags.Ephemeral });
+    } else {
+      await interaction.reply({ content: '❌ An unexpected error occurred while executing this command.', flags: MessageFlags.Ephemeral });
     }
   }
 });
