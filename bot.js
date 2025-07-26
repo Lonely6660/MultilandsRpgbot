@@ -1271,6 +1271,8 @@ client.on('interactionCreate', async interaction => {
                     [JSON.stringify(turnOrder), playerParticipantId, newBattleId]
                 );
 
+                const currentTurnName = playerCharacter.name;
+
                 const battleEmbed = new EmbedBuilder()
                     .setColor(0xFF0000)
                     .setTitle('⚔️ Battle Started! ⚔️')
