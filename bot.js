@@ -577,13 +577,13 @@ const commands = [
               { name: 'Envy', value: 'Envy' }
             ))
         .addStringOption(option =>
-          option.setName('description')
-            .setDescription('A description of your attack.')
-            .setRequired(false))
-        .addStringOption(option =>
           option.setName('base_damage_dice')
             .setDescription('The base damage dice for your attack (e.g., 1d4, 1d6).')
             .setRequired(true))
+        .addStringOption(option =>
+          option.setName('description')
+            .setDescription('A description of your attack.')
+            .setRequired(false))
         .addStringOption(option =>
           option.setName('effect_description')
             .setDescription('A description of your attack\'s effect.')
@@ -1637,21 +1637,21 @@ client.on('interactionCreate', async interaction => {
     const userId = interaction.user.id;
 
     if (subcommand === 'create') {
+      // Validate dice notation first before deferring reply
+      const baseDamageDice = options.getString('base_damage_dice');
+      try {
+        rollDice(baseDamageDice); // This will throw if invalid
+      } catch (e) {
+        return interaction.reply({ content: '❌ Invalid dice notation. Use format like "1d4" or "2d6+3".', flags: MessageFlags.Ephemeral });
+      }
+
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
       const attackName = options.getString('name');
       const attackType = options.getString('type');
       const attackAffinity = options.getString('affinity');
       const attackDescription = options.getString('description') || '';
-      const baseDamageDice = options.getString('base_damage_dice');
       const effectDescription = options.getString('effect_description') || '';
-
-      // Validate dice notation
-      try {
-        rollDice(baseDamageDice); // This will throw if invalid
-      } catch (e) {
-        return interaction.editReply({ content: '❌ Invalid dice notation. Use format like "1d4" or "2d6+3".' });
-      }
 
       try {
         // Fetch the player's latest character
@@ -1659,7 +1659,7 @@ client.on('interactionCreate', async interaction => {
         const charResult = await pgClient.query(charQuery, [userId]);
         const character = charResult.rows[0];
         if (!character) {
-          return interaction.editReply('❌ You need to create a character first with `/character create` to create attacks.');
+          return interaction.editReply({ content: '❌ You need to create a character first with `/character create` to create attacks.' });
         }
 
         // Check if attack already exists globally
@@ -1702,7 +1702,12 @@ client.on('interactionCreate', async interaction => {
         await interaction.editReply({ content: `✅ Attack "${attackName}" created successfully!` });
       } catch (error) {
         console.error('Error creating attack:', error);
-        return interaction.editReply({ content: '❌ An error occurred while creating your attack.' });
+        // Check if interaction was already replied to
+        if (interaction.replied || interaction.deferred) {
+          return interaction.editReply({ content: '❌ An error occurred while creating your attack.' });
+        } else {
+          return interaction.reply({ content: '❌ An error occurred while creating your attack.', flags: MessageFlags.Ephemeral });
+        }
       }
     } else if (subcommand === 'use') {
       await interaction.deferReply();
