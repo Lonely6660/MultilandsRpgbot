@@ -476,7 +476,7 @@ const commands = [
             .setRequired(false))
         .addStringOption(option =>
             option.setName('starting_attack')
-            .setDescription('The name of your character\'s starting attack (e.g., "Night Weaver\'s Grasp").')
+            .setDescription('The name of your character\'s starting attack (e.g., "").')
             .setRequired(false)))
     .addSubcommand(subcommand =>
       subcommand
@@ -552,7 +552,8 @@ const commands = [
     .addStringOption(option =>
       option.setName('attack_name')
         .setDescription('The name of the attack to use.')
-        .setRequired(false)),
+        .setRequired(false)
+        .setAutocomplete(true)),
 
   new SlashCommandBuilder()
     .setName('rp')
@@ -819,7 +820,7 @@ client.on('interactionCreate', async interaction => {
             const insertResult = await pgClient.query(insertQuery, [userId, name, avatarURL, gender, age, species, occupation, appearanceURL, sanityIncrease, sanityDecrease]);
             const newCharacterId = insertResult.rows[0].id;
 
-            let finalAttackToAssign = 'Night Weaver\'s Grasp'; // Default fallback attack
+            let finalAttackToAssign = ''; // Default fallback attack
             if (startingAttackName) {
                 // Validate if the chosen starting attack exists in the 'attacks' table
                 const checkAttackQuery = 'SELECT id FROM attacks WHERE name = $1;';
@@ -844,7 +845,7 @@ client.on('interactionCreate', async interaction => {
                 await pgClient.query(assignAttackQuery, [newCharacterId, initialAttackId]);
                 console.log(`Assigned ${finalAttackToAssign} to new character ${name}.`);
             } else {
-                console.error(`Initial attack "${finalAttackToAssign}" not found in 'attacks' table. This should not happen if default is 'Night Weaver\'s Grasp'.`);
+                console.error(`Initial attack "${finalAttackToAssign}" not found in 'attacks' table. This should not happen if default is ''.`);
             }
 
             // Final reply uses editReply as the interaction is already deferred
