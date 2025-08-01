@@ -1,0 +1,15 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Git Commit and Push",
+      "type": "shell",
+      "command": "git add . && git commit -m 'Auto commit from Codespace' && git push origin main",
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    }
+  ]
+}
