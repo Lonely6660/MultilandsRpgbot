@@ -473,10 +473,6 @@ const commands = [
         .addStringOption(option =>
             option.setName('sanity_decrease')
             .setDescription('What makes your character\'s sanity decrease?')
-            .setRequired(false))
-        .addStringOption(option =>
-            option.setName('starting_attack')
-            .setDescription('The name of your character\'s starting attack (e.g., "").')
             .setRequired(false)))
     .addSubcommand(subcommand =>
       subcommand
@@ -548,12 +544,59 @@ const commands = [
             .setRequired(true))),
   new SlashCommandBuilder()
     .setName('attack')
-    .setDescription('Perform an attack with your unlocked attacks.')
-    .addStringOption(option =>
-      option.setName('attack_name')
-        .setDescription('The name of the attack to use.')
-        .setRequired(false)
-        .setAutocomplete(true)),
+    .setDescription('Manage and perform attacks.')
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('create')
+        .setDescription('Create a new attack.')
+        .addStringOption(option =>
+          option.setName('name')
+            .setDescription('The name of your attack.')
+            .setRequired(true))
+        .addStringOption(option =>
+          option.setName('type')
+            .setDescription('The type of your attack (Slash, Pierce, Blunt, Magic).')
+            .setRequired(true)
+            .addChoices(
+              { name: 'Slash', value: 'Slash' },
+              { name: 'Pierce', value: 'Pierce' },
+              { name: 'Blunt', value: 'Blunt' },
+              { name: 'Magic', value: 'Magic' }
+            ))
+        .addStringOption(option =>
+          option.setName('affinity')
+            .setDescription('The affinity of your attack (Wrath, Lust, Sloth, Gluttony, Greed, Pride, Envy).')
+            .setRequired(true)
+            .addChoices(
+              { name: 'Wrath', value: 'Wrath' },
+              { name: 'Lust', value: 'Lust' },
+              { name: 'Sloth', value: 'Sloth' },
+              { name: 'Gluttony', value: 'Gluttony' },
+              { name: 'Greed', value: 'Greed' },
+              { name: 'Pride', value: 'Pride' },
+              { name: 'Envy', value: 'Envy' }
+            ))
+        .addStringOption(option =>
+          option.setName('description')
+            .setDescription('A description of your attack.')
+            .setRequired(false))
+        .addStringOption(option =>
+          option.setName('base_damage_dice')
+            .setDescription('The base damage dice for your attack (e.g., 1d4, 1d6).')
+            .setRequired(true))
+        .addStringOption(option =>
+          option.setName('effect_description')
+            .setDescription('A description of your attack\'s effect.')
+            .setRequired(false)))
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('use')
+        .setDescription('Use one of your attacks.')
+        .addStringOption(option =>
+          option.setName('attack_name')
+            .setDescription('The name of the attack to use.')
+            .setRequired(false)
+            .setAutocomplete(true))),
 
   new SlashCommandBuilder()
     .setName('rp')
@@ -780,7 +823,6 @@ client.on('interactionCreate', async interaction => {
         const appearanceURL = options.getString('appearance_url');
         const sanityIncrease = options.getString('sanity_increase');
         const sanityDecrease = options.getString('sanity_decrease');
-        const startingAttackName = options.getString('starting_attack');
 
         // --- Defer the reply immediately to prevent "Unknown interaction" ---
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -820,36 +862,8 @@ client.on('interactionCreate', async interaction => {
             const insertResult = await pgClient.query(insertQuery, [userId, name, avatarURL, gender, age, species, occupation, appearanceURL, sanityIncrease, sanityDecrease]);
             const newCharacterId = insertResult.rows[0].id;
 
-            let finalAttackToAssign = ''; // Default fallback attack
-            if (startingAttackName) {
-                // Validate if the chosen starting attack exists in the 'attacks' table
-                const checkAttackQuery = 'SELECT id FROM attacks WHERE name = $1;';
-                const checkAttackResult = await pgClient.query(checkAttackQuery, [startingAttackName]);
-                if (checkAttackResult.rows.length > 0) {
-                    finalAttackToAssign = startingAttackName;
-                } else {
-                    // Use followUp here to send an additional message after the initial deferReply
-                    await interaction.followUp({ content: `⚠️ The starting attack "${startingAttackName}" was not found in my database. Using "${finalAttackToAssign}" as your default starting attack.`, flags: MessageFlags.Ephemeral });
-                }
-            }
-
-            const getInitialAttackIdQuery = 'SELECT id FROM attacks WHERE name = $1;';
-            const initialAttackResult = await pgClient.query(getInitialAttackIdQuery, [finalAttackToAssign]);
-
-            if (initialAttackResult.rows.length > 0) {
-                const initialAttackId = initialAttackResult.rows[0].id;
-                const assignAttackQuery = `
-                    INSERT INTO character_attacks (character_id, attack_id, is_unlocked, level, perfect_hits)
-                    VALUES ($1, $2, TRUE, 0, 0); -- Start unlocked, level 0, 0 perfect hits
-                `;
-                await pgClient.query(assignAttackQuery, [newCharacterId, initialAttackId]);
-                console.log(`Assigned ${finalAttackToAssign} to new character ${name}.`);
-            } else {
-                console.error(`Initial attack "${finalAttackToAssign}" not found in 'attacks' table. This should not happen if default is ''.`);
-            }
-
             // Final reply uses editReply as the interaction is already deferred
-            await interaction.editReply({ content: `✅ Character "${name}" created successfully!` + (startingAttackName && startingAttackName !== finalAttackToAssign ? ` (Used "${finalAttackToAssign}" as starting attack).` : '') });
+            await interaction.editReply({ content: `✅ Character "${name}" created successfully!` });
 
         } catch (dbError) {
             console.error('Error creating character in DB:', dbError);
@@ -1004,35 +1018,66 @@ client.on('interactionCreate', async interaction => {
           const characterAttacksResult = await pgClient.query(characterAttacksQuery, [character.id]);
           const unlockedAttacks = characterAttacksResult.rows;
 
-          const characterEmbed = new EmbedBuilder()
-            .setColor(0x0099FF)
-            .setTitle(character.name)
-            .setDescription(`**${character.gender || 'N/A'}**, ${character.age || 'N/A'} years old ${character.species ? `(${character.species})` : ''}`)
-            .setThumbnail(character.avatar_url)
-            .addFields(
-              { name: 'Occupation', value: character.occupation || 'N/A', inline: true },
-              { name: 'Level', value: character.level.toString(), inline: true },
-              { name: 'CXP', value: character.cxp.toString(), inline: true },
-              { name: 'Health', value: `${character.health_current}/${character.health_max}`, inline: true }, // ADDED THIS
-              { name: 'Sanity', value: `${character.sanity_current}/${character.sanity_max}`, inline: true },
-              { name: 'Attack Chain Max', value: character.attack_chain_max.toString(), inline: true },
-              { name: 'Sanity Increases With', value: character.sanity_increase_desc || 'N/A', inline: false },
-              { name: 'Sanity Decreases With', value: character.sanity_decrease_desc || 'N/A', inline: false }
-              // Add more fields as you implement them (Skills, Affinities, Passives, Weaponry, Friendships)
-            );
-
+          // Format attacks for display
+          let attacksField = 'None yet.';
           if (unlockedAttacks.length > 0) {
-            const attacksField = unlockedAttacks.map(att => {
+            attacksField = unlockedAttacks.map(att => {
               const currentDamageDice = calculateDamageDice(att.base_damage_dice, att.level);
               return `**${att.name}** (Lvl ${att.level}, Hits: ${att.perfect_hits}/5)\n` +
                      `  Type: ${att.type_name}, Affinity: ${att.affinity_name}, Damage: ${currentDamageDice}`;
             }).join('\n');
-            characterEmbed.addFields({ name: 'Unlocked Attacks', value: attacksField, inline: false });
-          } else {
-            characterEmbed.addFields({ name: 'Unlocked Attacks', value: 'None yet.', inline: false });
           }
 
-          characterEmbed.setImage(character.appearance_url || null)
+          // Create token-style character sheet
+          const tokenDescription = `
+--Character Token--
+
+**Name:** ${character.name}
+
+**Gender:** ${character.gender || 'N/A'}
+
+**Age:** ${character.age || 'N/A'}
+
+**What increases your sanity:** ${character.sanity_increase_desc || 'N/A'}
+
+**What decreases your sanity:** ${character.sanity_decrease_desc || 'N/A'}
+
+**Species:** ${character.species || 'N/A'}
+
+**Skills:** N/A
+
+**Affinity:** N/A
+
+**Powers:** N/A
+
+**Attacks:** 
+${attacksField}
+
+**Passives/Mark:** N/A
+
+**Weaponry:** N/A
+
+**Stats:**
+Damage: ??
+Health: ${character.health_current}/${character.health_max}
+Agility: ??
+Speed: ??
+Stamina: ??
+Sanity: ${character.sanity_current}/${character.sanity_max}
+
+**Friendships:** N/A
+
+**Occupation:** ${character.occupation || 'N/A'}
+
+**Appearance:**
+          `.trim();
+
+          const characterEmbed = new EmbedBuilder()
+            .setColor(0x0099FF)
+            .setTitle(`${character.name}'s Character Token`)
+            .setDescription(tokenDescription)
+            .setThumbnail(character.avatar_url)
+            .setImage(character.appearance_url || null)
             .setFooter({ text: `Character ID: ${character.id} | User ID: ${character.user_id}` })
             .setTimestamp();
 
@@ -1581,93 +1626,165 @@ client.on('interactionCreate', async interaction => {
   }
 });
 
-// Add /attack command handler
+    // Add /attack command handler
 client.on('interactionCreate', async interaction => {
   if (!interaction.isCommand()) return;
 
   const { commandName, options } = interaction;
 
   if (commandName === 'attack') {
-    await interaction.deferReply();
-
+    const subcommand = options.getSubcommand();
     const userId = interaction.user.id;
-    const attackName = options.getString('attack_name');
 
-    try {
-      // Fetch the player's latest character
-      const charQuery = 'SELECT id, name, level, cxp FROM characters WHERE user_id = $1 ORDER BY id DESC LIMIT 1;';
-      const charResult = await pgClient.query(charQuery, [userId]);
-      const character = charResult.rows[0];
-      if (!character) {
-        return interaction.editReply('❌ You need to create a character first with `/character create` to attack.');
+    if (subcommand === 'create') {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+      const attackName = options.getString('name');
+      const attackType = options.getString('type');
+      const attackAffinity = options.getString('affinity');
+      const attackDescription = options.getString('description') || '';
+      const baseDamageDice = options.getString('base_damage_dice');
+      const effectDescription = options.getString('effect_description') || '';
+
+      // Validate dice notation
+      try {
+        rollDice(baseDamageDice); // This will throw if invalid
+      } catch (e) {
+        return interaction.editReply({ content: '❌ Invalid dice notation. Use format like "1d4" or "2d6+3".' });
       }
 
-      // Fetch unlocked attacks for the character
-      const attacksQuery = `
-        SELECT a.id, a.name, a.base_damage_dice, ca.level AS attack_level
-        FROM character_attacks ca
-        JOIN attacks a ON ca.attack_id = a.id
-        WHERE ca.character_id = $1 AND ca.is_unlocked = TRUE;
-      `;
-      const attacksResult = await pgClient.query(attacksQuery, [character.id]);
-      const attacks = attacksResult.rows;
-
-      if (attacks.length === 0) {
-        return interaction.editReply('❌ Your character has no unlocked attacks to use.');
-      }
-
-      // Determine which attack to use
-      let attack;
-      if (attackName) {
-        attack = attacks.find(a => a.name.toLowerCase() === attackName.toLowerCase());
-        if (!attack) {
-          return interaction.editReply(`❌ Attack "${attackName}" is not unlocked or does not exist.`);
+      try {
+        // Fetch the player's latest character
+        const charQuery = 'SELECT id FROM characters WHERE user_id = $1 ORDER BY id DESC LIMIT 1;';
+        const charResult = await pgClient.query(charQuery, [userId]);
+        const character = charResult.rows[0];
+        if (!character) {
+          return interaction.editReply('❌ You need to create a character first with `/character create` to create attacks.');
         }
-      } else {
-        attack = attacks[0]; // Default to first unlocked attack
+
+        // Check if attack already exists globally
+        const checkQuery = 'SELECT id FROM attacks WHERE name = $1;';
+        const checkResult = await pgClient.query(checkQuery, [attackName]);
+        if (checkResult.rows.length > 0) {
+          return interaction.editReply({ content: `❌ An attack named "${attackName}" already exists.` });
+        }
+
+        // Get type_id and affinity_id
+        const typeQuery = 'SELECT id FROM attack_types WHERE name = $1;';
+        const typeResult = await pgClient.query(typeQuery, [attackType]);
+        if (typeResult.rows.length === 0) {
+          return interaction.editReply({ content: `❌ Attack type "${attackType}" not found.` });
+        }
+        const typeId = typeResult.rows[0].id;
+
+        const affinityQuery = 'SELECT id FROM affinities WHERE name = $1;';
+        const affinityResult = await pgClient.query(affinityQuery, [attackAffinity]);
+        if (affinityResult.rows.length === 0) {
+          return interaction.editReply({ content: `❌ Affinity "${attackAffinity}" not found.` });
+        }
+        const affinityId = affinityResult.rows[0].id;
+
+        // Insert the new attack into the attacks table
+        const insertAttackQuery = `
+          INSERT INTO attacks (name, type_id, affinity_id, description, base_damage_dice, effect_description)
+          VALUES ($1, $2, $3, $4, $5, $6) RETURNING id;
+        `;
+        const insertResult = await pgClient.query(insertAttackQuery, [attackName, typeId, affinityId, attackDescription, baseDamageDice, effectDescription]);
+        const attackId = insertResult.rows[0].id;
+
+        // Link the attack to the character who created it
+        const linkAttackQuery = `
+          INSERT INTO character_attacks (character_id, attack_id, is_unlocked, level, perfect_hits)
+          VALUES ($1, $2, TRUE, 0, 0);
+        `;
+        await pgClient.query(linkAttackQuery, [character.id, attackId]);
+
+        await interaction.editReply({ content: `✅ Attack "${attackName}" created successfully!` });
+      } catch (error) {
+        console.error('Error creating attack:', error);
+        return interaction.editReply({ content: '❌ An error occurred while creating your attack.' });
       }
+    } else if (subcommand === 'use') {
+      await interaction.deferReply();
 
-      // Calculate damage dice starting at 1d4 plus increments based on character cxp (example)
-      const baseDice = '1d4';
-      const level = character.cxp || 0;
-      const damageDice = calculateDamageDice(baseDice, level);
+      const attackName = options.getString('attack_name');
 
-      // Roll the damage dice
-      const rollResult = rollDice(damageDice);
+      try {
+        // Fetch the player's latest character
+        const charQuery = 'SELECT id, name, level, cxp FROM characters WHERE user_id = $1 ORDER BY id DESC LIMIT 1;';
+        const charResult = await pgClient.query(charQuery, [userId]);
+        const character = charResult.rows[0];
+        if (!character) {
+          return interaction.editReply('❌ You need to create a character first with `/character create` to attack.');
+        }
 
-      // Determine result text and gif url based on roll
-      let resultText = '';
-      let gifUrl = '';
+        // Fetch unlocked attacks for the character
+        const attacksQuery = `
+          SELECT a.id, a.name, a.base_damage_dice, ca.level AS attack_level
+          FROM character_attacks ca
+          JOIN attacks a ON ca.attack_id = a.id
+          WHERE ca.character_id = $1 AND ca.is_unlocked = TRUE;
+        `;
+        const attacksResult = await pgClient.query(attacksQuery, [character.id]);
+        const attacks = attacksResult.rows;
 
-      if (rollResult.total === rollResult.maxPossible) {
-        resultText = 'AMAZING!!!!! (You did a perfect hit)';
-        gifUrl = 'https://media.giphy.com/media/111ebonMs90YLu/giphy.gif'; // example perfect hit gif
-      } else if (rollResult.total >= 3) {
-        resultText = 'GREAT!!! (Rolled a 3 or equivalent)';
-        gifUrl = 'https://media.giphy.com/media/3o6Zt481isNVuQI1l6/giphy.gif'; // example great hit gif
-      } else if (rollResult.total === 2) {
-        resultText = 'GOOD!! (Rolled a 2 or equivalent)';
-        gifUrl = 'https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif'; // example good hit gif
-      } else {
-        resultText = 'bleh... (Attack deflected or rolled a 1)';
-        gifUrl = 'https://media.giphy.com/media/3o6ZtaO9BZHcOjmErm/giphy.gif'; // example deflect gif
-      }
+        if (attacks.length === 0) {
+          return interaction.editReply('❌ Your character has no unlocked attacks to use.');
+        }
 
-      // Create embed with attack result
-      const embed = new EmbedBuilder()
-        .setTitle(`${character.name} uses ${attack.name}!`)
-        .setDescription(`${resultText}\nRolled: [${rollResult.rolls.join(', ')}] Total: **${rollResult.total}**`)
-        .setImage(gifUrl)
-        .setTimestamp();
+        // Determine which attack to use
+        let attack;
+        if (attackName) {
+          attack = attacks.find(a => a.name.toLowerCase() === attackName.toLowerCase());
+          if (!attack) {
+            return interaction.editReply(`❌ Attack "${attackName}" is not unlocked or does not exist.`);
+          }
+        } else {
+          attack = attacks[0]; // Default to first unlocked attack
+        }
 
-      await interaction.editReply({ embeds: [embed] });
+        // Calculate damage dice starting at 1d4 plus increments based on character cxp (example)
+        const baseDice = '1d4';
+        const level = character.cxp || 0;
+        const damageDice = calculateDamageDice(baseDice, level);
 
-    } catch (error) {
-      console.error('Error handling /attack command:', error);
-      if (interaction.replied || interaction.deferred) {
-        await interaction.editReply({ content: '❌ An error occurred while executing the attack command.' });
-      } else {
-        await interaction.reply({ content: '❌ An error occurred while executing the attack command.', flags: MessageFlags.Ephemeral });
+        // Roll the damage dice
+        const rollResult = rollDice(damageDice);
+
+        // Determine result text and gif url based on roll
+        let resultText = '';
+        let gifUrl = '';
+
+        if (rollResult.total === rollResult.maxPossible) {
+          resultText = 'AMAZING!!!!! (You did a perfect hit)';
+          gifUrl = 'https://media.giphy.com/media/111ebonMs90YLu/giphy.gif'; // example perfect hit gif
+        } else if (rollResult.total >= 3) {
+          resultText = 'GREAT!!! (Rolled a 3 or equivalent)';
+          gifUrl = 'https://media.giphy.com/media/3o6Zt481isNVuQI1l6/giphy.gif'; // example great hit gif
+        } else if (rollResult.total === 2) {
+          resultText = 'GOOD!! (Rolled a 2 or equivalent)';
+          gifUrl = 'https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif'; // example good hit gif
+        } else {
+          resultText = 'bleh... (Attack deflected or rolled a 1)';
+          gifUrl = 'https://media.giphy.com/media/3o6ZtaO9BZHcOjmErm/giphy.gif'; // example deflect gif
+        }
+
+        // Create embed with attack result
+        const embed = new EmbedBuilder()
+          .setTitle(`${character.name} uses ${attack.name}!`)
+          .setDescription(`${resultText}\nRolled: [${rollResult.rolls.join(', ')}] Total: **${rollResult.total}**`)
+          .setImage(gifUrl)
+          .setTimestamp();
+
+        await interaction.editReply({ embeds: [embed] });
+
+      } catch (error) {
+        console.error('Error handling /attack command:', error);
+        if (interaction.replied || interaction.deferred) {
+          await interaction.editReply({ content: '❌ An error occurred while executing the attack command.' });
+        } else {
+          await interaction.reply({ content: '❌ An error occurred while executing the attack command.', flags: MessageFlags.Ephemeral });
+        }
       }
     }
   }
