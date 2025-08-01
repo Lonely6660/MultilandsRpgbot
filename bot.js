@@ -488,6 +488,46 @@ const commands = [
             .setRequired(false)))
     .addSubcommand(subcommand =>
       subcommand
+        .setName('edit') // New subcommand to edit character sheet
+        .setDescription('Edit your character\'s sheet.')
+        .addStringOption(option =>
+          option.setName('name')
+            .setDescription('The name of the character to edit (required).')
+            .setRequired(true))
+        .addStringOption(option =>
+          option.setName('avatar_url')
+            .setDescription('The URL for your character\'s avatar image.')
+            .setRequired(false))
+        .addStringOption(option =>
+          option.setName('gender')
+            .setDescription('The character\'s gender.')
+            .setRequired(false))
+        .addIntegerOption(option =>
+          option.setName('age')
+            .setDescription('The character\'s age.')
+            .setRequired(false))
+        .addStringOption(option =>
+          option.setName('species')
+            .setDescription('The character\'s species.')
+            .setRequired(false))
+        .addStringOption(option =>
+          option.setName('occupation')
+            .setDescription('The character\'s occupation.')
+            .setRequired(false))
+        .addStringOption(option =>
+          option.setName('appearance_url')
+            .setDescription('The URL for your character\'s full appearance image.')
+            .setRequired(false))
+        .addStringOption(option =>
+            option.setName('sanity_increase')
+            .setDescription('What makes your character\'s sanity increase?')
+            .setRequired(false))
+        .addStringOption(option =>
+            option.setName('sanity_decrease')
+            .setDescription('What makes your character\'s sanity decrease?')
+            .setRequired(false)))
+    .addSubcommand(subcommand =>
+      subcommand
         .setName('list')
         .setDescription('List your created characters.'))
     .addSubcommand(subcommand =>
@@ -819,6 +859,113 @@ client.on('interactionCreate', async interaction => {
                 return interaction.reply({ content: '❌ An error occurred while saving your character.', flags: MessageFlags.Ephemeral });
             }
         }
+      } else if (subcommand === 'sheet') { // 'sheet' subcommand handler
+      } else if (subcommand === 'create') { 
+        // existing create handler code unchanged
+      } else if (subcommand === 'edit') { // 'edit' subcommand handler
+        const characterName = options.getString('name');
+        const avatarURL = options.getString('avatar_url');
+        const gender = options.getString('gender');
+        const age = options.getInteger('age');
+        const species = options.getString('species');
+        const occupation = options.getString('occupation');
+        const appearanceURL = options.getString('appearance_url');
+        const sanityIncrease = options.getString('sanity_increase');
+        const sanityDecrease = options.getString('sanity_decrease');
+        const userId = interaction.user.id;
+
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+        // Validate URLs if provided
+        if (avatarURL) {
+          try {
+            new URL(avatarURL);
+          } catch (e) {
+            return interaction.editReply({ content: '❌ Invalid URL for avatar. Please provide a valid image URL.' });
+          }
+        }
+        if (appearanceURL) {
+          try {
+            new URL(appearanceURL);
+          } catch (e) {
+            return interaction.editReply({ content: '❌ Invalid URL for appearance. Please provide a valid image URL.' });
+          }
+        }
+
+        try {
+          // Check if character exists for this user
+          const checkQuery = 'SELECT * FROM characters WHERE user_id = $1 AND name = $2;';
+          const checkResult = await pgClient.query(checkQuery, [userId, characterName]);
+
+          if (checkResult.rows.length === 0) {
+            return interaction.editReply({ content: `❌ Character "${characterName}" not found.` });
+          }
+
+          // Build update query dynamically based on provided fields
+          const fieldsToUpdate = [];
+          const values = [];
+          let paramIndex = 1;
+
+          if (avatarURL !== null && avatarURL !== undefined) {
+            fieldsToUpdate.push(`avatar_url = $${paramIndex++}`);
+            values.push(avatarURL);
+          }
+          if (gender !== null && gender !== undefined) {
+            fieldsToUpdate.push(`gender = $${paramIndex++}`);
+            values.push(gender);
+          }
+          if (age !== null && age !== undefined) {
+            fieldsToUpdate.push(`age = $${paramIndex++}`);
+            values.push(age);
+          }
+          if (species !== null && species !== undefined) {
+            fieldsToUpdate.push(`species = $${paramIndex++}`);
+            values.push(species);
+          }
+          if (occupation !== null && occupation !== undefined) {
+            fieldsToUpdate.push(`occupation = $${paramIndex++}`);
+            values.push(occupation);
+          }
+          if (appearanceURL !== null && appearanceURL !== undefined) {
+            fieldsToUpdate.push(`appearance_url = $${paramIndex++}`);
+            values.push(appearanceURL);
+          }
+          if (sanityIncrease !== null && sanityIncrease !== undefined) {
+            fieldsToUpdate.push(`sanity_increase_desc = $${paramIndex++}`);
+            values.push(sanityIncrease);
+          }
+          if (sanityDecrease !== null && sanityDecrease !== undefined) {
+            fieldsToUpdate.push(`sanity_decrease_desc = $${paramIndex++}`);
+            values.push(sanityDecrease);
+          }
+
+          if (fieldsToUpdate.length === 0) {
+            return interaction.editReply({ content: '❌ No fields provided to update.' });
+          }
+
+          // Add userId and characterName for WHERE clause
+          values.push(userId);
+          values.push(characterName);
+
+          const updateQuery = `
+            UPDATE characters SET ${fieldsToUpdate.join(', ')}
+            WHERE user_id = $${paramIndex++} AND name = $${paramIndex}
+            RETURNING *;
+          `;
+
+          const updateResult = await pgClient.query(updateQuery, values);
+
+          if (updateResult.rows.length === 0) {
+            return interaction.editReply({ content: `❌ Failed to update character "${characterName}".` });
+          }
+
+          await interaction.editReply({ content: `✅ Character "${characterName}" updated successfully.` });
+
+        } catch (dbError) {
+          console.error('Error updating character in DB:', dbError);
+          return interaction.editReply({ content: '❌ An error occurred while updating your character.' });
+        }
+      } else if (subcommand === 'sheet') { // 'sheet' subcommand handler
 
 
       } else if (subcommand === 'sheet') { // 'sheet' subcommand handler
