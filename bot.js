@@ -906,7 +906,6 @@ client.on('interactionCreate', async interaction => {
             return interaction.editReply({ content: '❌ Invalid URL for appearance. Please provide a valid image URL.' });
           }
         }
-
         try {
           // Check if character exists for this user
           const checkQuery = 'SELECT * FROM characters WHERE user_id = $1 AND name = $2;';
@@ -1028,6 +1027,14 @@ client.on('interactionCreate', async interaction => {
             }).join('\n');
           }
 
+          // Determine appearance display (image or description)
+          let appearanceDisplay = '';
+          if (character.appearance_url) {
+            appearanceDisplay = `[Image](${character.appearance_url})`;
+          } else {
+            appearanceDisplay = 'N/A';
+          }
+
           // Create token-style character sheet
           const tokenDescription = `
 --Character Token--
@@ -1069,7 +1076,7 @@ Sanity: ${character.sanity_current}/${character.sanity_max}
 
 **Occupation:** ${character.occupation || 'N/A'}
 
-**Appearance:**
+**Appearance:** ${appearanceDisplay}
           `.trim();
 
           const characterEmbed = new EmbedBuilder()
@@ -1077,7 +1084,6 @@ Sanity: ${character.sanity_current}/${character.sanity_max}
             .setTitle(`${character.name}'s Character Token`)
             .setDescription(tokenDescription)
             .setThumbnail(character.avatar_url)
-            .setImage(character.appearance_url || null)
             .setFooter({ text: `Character ID: ${character.id} | User ID: ${character.user_id}` })
             .setTimestamp();
 
