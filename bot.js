@@ -1773,27 +1773,27 @@ client.on('interactionCreate', async interaction => {
 
         // Determine result text and gif url based on roll
         let resultText = '';
-        let gifUrl = '';
+        let mp4Url = '';
 
         if (rollResult.total === rollResult.maxPossible) {
           resultText = '# **AMAZING!!!!!** (You did a perfect hit)';
-          gifUrl = 'https://images-ext-1.discordapp.net/external/fXBi9FhSU5wFSgaBZ8v8UyWiv4LytRuL5kFuN7a8Wss/https/media.tenor.com/wmvhBXALiEIAAAPo/block-tales-roblox.mp4'; // example perfect hit gif
+          mp4Url = 'https://images-ext-1.discordapp.net/external/fXBi9FhSU5wFSgaBZ8v8UyWiv4LytRuL5kFuN7a8Wss/https/media.tenor.com/wmvhBXALiEIAAAPo/block-tales-roblox.mp4'; // example perfect hit gif
         } else if (rollResult.total >= 3) {
           resultText = '# **GREAT!!!** (Rolled a 3 or equivalent)';
-          gifUrl = 'https://images-ext-1.discordapp.net/external/YNUMoW33FKDbl7h1k_1Rf6gqbP6UGwqFbEjPq4sta7g/https/media.tenor.com/gqDIWHHfpZwAAAPo/block-tales-roblox.mp4'; // example great hit gif
+          mp4Url = 'https://images-ext-1.discordapp.net/external/YNUMoW33FKDbl7h1k_1Rf6gqbP6UGwqFbEjPq4sta7g/https/media.tenor.com/gqDIWHHfpZwAAAPo/block-tales-roblox.mp4'; // example great hit gif
         } else if (rollResult.total === 2) {
           resultText = '# **GOOD!!** (Rolled a 2 or equivalent)';
-          gifUrl = 'https://images-ext-1.discordapp.net/external/H6_zHL2IEOfQPud9_c-ZDHWQn8DQicz9M2Lc4va_Wt8/https/media.tenor.com/Ym4XaBaZYI8AAAPo/block-tales-roblox.mp4'; // example good hit gif
+          mp4Url = 'https://images-ext-1.discordapp.net/external/H6_zHL2IEOfQPud9_c-ZDHWQn8DQicz9M2Lc4va_Wt8/https/media.tenor.com/Ym4XaBaZYI8AAAPo/block-tales-roblox.mp4'; // example good hit gif
         } else {
           resultText = 'bleh... (Attack deflected or rolled a 1)';
-          gifUrl = 'https://images-ext-1.discordapp.net/external/fY-q36g8iNjCc5bCdpsJOeF3WkF-WCmKfQmKSvs4_M0/https/media.tenor.com/3AMlYFIUoXgAAAPo/brainrot-nerve-burst.mp4'; // example deflect gif
+          mp4Url = 'https://images-ext-1.discordapp.net/external/fY-q36g8iNjCc5bCdpsJOeF3WkF-WCmKfQmKSvs4_M0/https/media.tenor.com/3AMlYFIUoXgAAAPo/brainrot-nerve-burst.mp4'; // example deflect gif
         }
 
         // Create embed with attack result
         const embed = new EmbedBuilder()
           .setTitle(`${character.name} uses ${attack.name}!`)
           .setDescription(`${resultText}\nRolled: [${rollResult.rolls.join(', ')}] Total: **${rollResult.total}**`)
-          .setImage(gifUrl)
+          .setImage(mp4Url)
           .setTimestamp();
 
         await interaction.editReply({ embeds: [embed] });
