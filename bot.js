@@ -874,7 +874,6 @@ client.on('interactionCreate', async interaction => {
                 return interaction.reply({ content: '❌ An error occurred while saving your character.', flags: MessageFlags.Ephemeral });
             }
         }
-      } else if (subcommand === 'sheet') { // 'sheet' subcommand handler
       } else if (subcommand === 'create') { 
         // existing create handler code unchanged
       } else if (subcommand === 'edit') { // 'edit' subcommand handler
@@ -980,11 +979,10 @@ client.on('interactionCreate', async interaction => {
           return interaction.editReply({ content: '❌ An error occurred while updating your character.' });
         }
       } else if (subcommand === 'sheet') { // 'sheet' subcommand handler
-
-
-      } else if (subcommand === 'sheet') { // 'sheet' subcommand handler
         const characterName = options.getString('name');
         let character;
+
+        console.log('Handling /character sheet command for user:', userId, 'character:', characterName);
 
         // Defer reply for sheet command, could be ephemeral or not
         await interaction.deferReply({ flags: MessageFlags.Ephemeral }); // Made ephemeral for sheet for privacy
@@ -994,14 +992,17 @@ client.on('interactionCreate', async interaction => {
             const query = 'SELECT * FROM characters WHERE user_id = $1 AND name = $2;';
             const result = await pgClient.query(query, [userId, characterName]);
             character = result.rows[0];
+            console.log('Fetched character by name:', characterName, character);
           } else {
             // Fetch the latest created character if no name is provided
             const query = 'SELECT * FROM characters WHERE user_id = $1 ORDER BY id DESC LIMIT 1;';
             const result = await pgClient.query(query, [userId]);
             character = result.rows[0];
+            console.log('Fetched latest character:', character);
           }
 
           if (!character) {
+            console.log('Character not found');
             return interaction.editReply({ content: `❌ Character "${characterName || 'latest'}" not found. Create one with \`/character create\`.` });
           }
 
@@ -1016,6 +1017,7 @@ client.on('interactionCreate', async interaction => {
           `;
           const characterAttacksResult = await pgClient.query(characterAttacksQuery, [character.id]);
           const unlockedAttacks = characterAttacksResult.rows;
+          console.log('Fetched unlocked attacks:', unlockedAttacks);
 
           // Format attacks for display
           let attacksField = 'None yet.';
