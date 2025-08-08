@@ -824,6 +824,14 @@ client.on('interactionCreate', async interaction => {
         const sanityIncrease = options.getString('sanity_increase');
         const sanityDecrease = options.getString('sanity_decrease');
 
+        // Default stats as undefined, customizable later in DB
+        const damage = undefined;
+        const health_max = undefined;
+        const agility = undefined;
+        const speed = undefined;
+        const stamina = undefined;
+        const sanity = undefined;
+
         // --- Defer the reply immediately to prevent "Unknown interaction" ---
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
@@ -854,12 +862,12 @@ client.on('interactionCreate', async interaction => {
               return interaction.editReply({ content: `❌ You already have a character named "${name}".` });
             }
 
-            // Insert new character with all new fields, including sanity descriptions
+            // Insert new character with all new fields, including sanity descriptions and undefined stats
             const insertQuery = `
-              INSERT INTO characters (user_id, name, avatar_url, gender, age, species, occupation, appearance_url, sanity_increase_desc, sanity_decrease_desc)
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id, sanity_max; -- Return the character ID and max sanity
+              INSERT INTO characters (user_id, name, avatar_url, gender, age, species, occupation, appearance_url, sanity_increase_desc, sanity_decrease_desc, damage, health_max, agility, speed, stamina, sanity)
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING id, sanity_max; -- Return the character ID and max sanity
             `;
-            const insertResult = await pgClient.query(insertQuery, [userId, name, avatarURL, gender, age, species, occupation, appearanceURL, sanityIncrease, sanityDecrease]);
+            const insertResult = await pgClient.query(insertQuery, [userId, name, avatarURL, gender, age, species, occupation, appearanceURL, sanityIncrease, sanityDecrease, damage, health_max, agility, speed, stamina, sanity]);
             const newCharacterId = insertResult.rows[0].id;
 
             // Final reply uses editReply as the interaction is already deferred
@@ -874,8 +882,6 @@ client.on('interactionCreate', async interaction => {
                 return interaction.reply({ content: '❌ An error occurred while saving your character.', flags: MessageFlags.Ephemeral });
             }
         }
-      } else if (subcommand === 'create') { 
-        // existing create handler code unchanged
       } else if (subcommand === 'edit') { // 'edit' subcommand handler
         const characterName = options.getString('name');
         const avatarURL = options.getString('avatar_url');
@@ -886,6 +892,8 @@ client.on('interactionCreate', async interaction => {
         const appearanceURL = options.getString('appearance_url');
         const sanityIncrease = options.getString('sanity_increase');
         const sanityDecrease = options.getString('sanity_decrease');
+                const health_max =options.getString('health_max');
+        const damage = options.getString('damage');
         const userId = interaction.user.id;
 
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -1053,28 +1061,27 @@ client.on('interactionCreate', async interaction => {
 
 **Species:** ${character.species || 'N/A'}
 
-**Skills:** N/A
+**Skills:** ${character.skills || 'N/A'}
 
-**Affinity:** N/A
+**Affinity:** ${character.affinity || 'N/A'}
 
-**Powers:** N/A
+**Powers:** ${character.powers || 'N/A'}
 
 **Attacks:** 
 ${attacksField}
 
-**Passives/Mark:** N/A
+**Passives/Mark:** ${character.passives || 'N/A'}
 
-**Weaponry:** N/A
-
+**Weaponry:** ${character.weaponry || 'N/A'}
 **Stats:**
-Damage: ??
-Health: ${character.health_current}/${character.health_max}
-Agility: ??
-Speed: ??
-Stamina: ??
-Sanity: ${character.sanity_current}/${character.sanity_max}
+Damage: ${character.damage || 'N/A'}
+Health: ${character.health_current || 'N/A'}/${character.health_max || 'N/A'}
+Agility: ${character.agility || 'N/A'}
+Speed: ${character.speed || 'N/A'}
+Stamina: ${character.stamina || 'N/A'}
+Sanity: ${character.sanity_current || 'N/A'}/${character.sanity_max || 'N/A'}
 
-**Friendships:** N/A
+**Friendships:** ${character.friendships || 'N/A'}
 
 **Occupation:** ${character.occupation || 'N/A'}
 
@@ -1769,17 +1776,17 @@ client.on('interactionCreate', async interaction => {
         let gifUrl = '';
 
         if (rollResult.total === rollResult.maxPossible) {
-          resultText = 'AMAZING!!!!! (You did a perfect hit)';
-          gifUrl = 'https://media.giphy.com/media/111ebonMs90YLu/giphy.gif'; // example perfect hit gif
+          resultText = '# **AMAZING!!!!!** (You did a perfect hit)';
+          gifUrl = 'https://images-ext-1.discordapp.net/external/fXBi9FhSU5wFSgaBZ8v8UyWiv4LytRuL5kFuN7a8Wss/https/media.tenor.com/wmvhBXALiEIAAAPo/block-tales-roblox.mp4'; // example perfect hit gif
         } else if (rollResult.total >= 3) {
-          resultText = 'GREAT!!! (Rolled a 3 or equivalent)';
-          gifUrl = 'https://media.giphy.com/media/3o6Zt481isNVuQI1l6/giphy.gif'; // example great hit gif
+          resultText = '# **GREAT!!!** (Rolled a 3 or equivalent)';
+          gifUrl = 'https://images-ext-1.discordapp.net/external/YNUMoW33FKDbl7h1k_1Rf6gqbP6UGwqFbEjPq4sta7g/https/media.tenor.com/gqDIWHHfpZwAAAPo/block-tales-roblox.mp4'; // example great hit gif
         } else if (rollResult.total === 2) {
-          resultText = 'GOOD!! (Rolled a 2 or equivalent)';
-          gifUrl = 'https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif'; // example good hit gif
+          resultText = '# **GOOD!!** (Rolled a 2 or equivalent)';
+          gifUrl = 'https://images-ext-1.discordapp.net/external/H6_zHL2IEOfQPud9_c-ZDHWQn8DQicz9M2Lc4va_Wt8/https/media.tenor.com/Ym4XaBaZYI8AAAPo/block-tales-roblox.mp4'; // example good hit gif
         } else {
           resultText = 'bleh... (Attack deflected or rolled a 1)';
-          gifUrl = 'https://media.giphy.com/media/3o6ZtaO9BZHcOjmErm/giphy.gif'; // example deflect gif
+          gifUrl = 'https://images-ext-1.discordapp.net/external/fY-q36g8iNjCc5bCdpsJOeF3WkF-WCmKfQmKSvs4_M0/https/media.tenor.com/3AMlYFIUoXgAAAPo/brainrot-nerve-burst.mp4'; // example deflect gif
         }
 
         // Create embed with attack result
