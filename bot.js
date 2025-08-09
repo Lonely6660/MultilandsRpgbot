@@ -1777,16 +1777,16 @@ client.on('interactionCreate', async interaction => {
 
         if (rollResult.total === rollResult.maxPossible) {
           resultText = '# **AMAZING!!!!!** (You did a perfect hit)';
-          gifUrl = 'assets/gifs/perfect_hit.gif'; // local gif file
+          gifUrl = 'https://www.google.com/url?sa=i&url=https%3A%2F%2Ftenor.com%2Fview%2Fblocktales-roblox-rating-amazing-animation-gif-3163380169984698063&psig=AOvVaw3ofdfbffi5m3bUDucjhPs0&ust=1754868171490000&source=images&cd=vfe&opi=89978449&ved=0CBQQjRxqFwoTCJCBor7v_o4DFQAAAAAdAAAAABAE'; // local gif file
         } else if (rollResult.total >= 3) {
           resultText = '# **GREAT!!!** (Rolled a 3 or equivalent)';
-          gifUrl = 'assets/gifs/great_hit.gif'; // local gif file
+          gifUrl = 'https://www.google.com/url?sa=i&url=https%3A%2F%2Fblock-tales.fandom.com%2Fwiki%2FUser_blog%3AThisIsCoolGuyzHere236549%2Ftransparent_GIFs&psig=AOvVaw3ofdfbffi5m3bUDucjhPs0&ust=1754868171490000&source=images&cd=vfe&opi=89978449&ved=0CBQQjRxqFwoTCNCdgNvv_o4DFQAAAAAdAAAAABAK'; // local gif file
         } else if (rollResult.total === 2) {
           resultText = '# **GOOD!!** (Rolled a 2 or equivalent)';
-          gifUrl = 'assets/gifs/good_hit.gif'; // local gif file
+          gifUrl = 'https://www.google.com/url?sa=i&url=https%3A%2F%2Ftenor.com%2Fview%2Fgood-blocktales-rating-roblox-pixel-gif-5262027714003291268&psig=AOvVaw3ofdfbffi5m3bUDucjhPs0&ust=1754868171490000&source=images&cd=vfe&opi=89978449&ved=0CBQQjRxqFwoTCNCdgNvv_o4DFQAAAAAdAAAAABAE'; // local gif file
         } else {
           resultText = 'bleh... (Attack deflected or rolled a 1)';
-          gifUrl = 'assets/gifs/deflect.gif'; // local gif file
+          gifUrl = 'https://www.google.com/url?sa=i&url=https%3A%2F%2Ftenor.com%2Fsearch%2Fbrain-fart-gifs&psig=AOvVaw2ttpJkUSuLfrZnJgHnUXFe&ust=1754868339686000&source=images&cd=vfe&opi=89978449&ved=0CBQQjRxqFwoTCLDqvY7w_o4DFQAAAAAdAAAAABAE'; // local gif file
         }
 
         // Create embed with attack result
