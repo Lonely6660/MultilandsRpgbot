@@ -1777,16 +1777,16 @@ client.on('interactionCreate', async interaction => {
 
         if (rollResult.total === rollResult.maxPossible) {
           resultText = '# **AMAZING!!!!!** (You did a perfect hit)';
-          gifUrl = 'https://www.google.com/url?sa=i&url=https%3A%2F%2Ftenor.com%2Fview%2Fblocktales-roblox-rating-amazing-animation-gif-3163380169984698063&psig=AOvVaw3ofdfbffi5m3bUDucjhPs0&ust=1754868171490000&source=images&cd=vfe&opi=89978449&ved=0CBQQjRxqFwoTCJCBor7v_o4DFQAAAAAdAAAAABAE'; // local gif file
+          gifUrl = '<div class="tenor-gif-embed" data-postid="9278811802888912655" data-share-method="host" data-aspect-ratio="1.66667" data-width="100%"><a href="https://tenor.com/view/block-tales-roblox-gif-9278811802888912655">Block Tales Roblox Sticker</a>from <a href="https://tenor.com/search/block+tales-stickers">Block Tales Stickers</a></div> <script type="text/javascript" async src="https://tenor.com/embed.js"></script>'; // local gif file
         } else if (rollResult.total >= 3) {
           resultText = '# **GREAT!!!** (Rolled a 3 or equivalent)';
-          gifUrl = 'https://www.google.com/url?sa=i&url=https%3A%2F%2Fblock-tales.fandom.com%2Fwiki%2FUser_blog%3AThisIsCoolGuyzHere236549%2Ftransparent_GIFs&psig=AOvVaw3ofdfbffi5m3bUDucjhPs0&ust=1754868171490000&source=images&cd=vfe&opi=89978449&ved=0CBQQjRxqFwoTCNCdgNvv_o4DFQAAAAAdAAAAABAK'; // local gif file
+          gifUrl = '<div class="tenor-gif-embed" data-postid="13934495841512716486" data-share-method="host" data-aspect-ratio="1.81818" data-width="100%"><a href="https://tenor.com/view/block-tales-roblox-gif-13934495841512716486">Block Tales Roblox Sticker</a>from <a href="https://tenor.com/search/block+tales-stickers">Block Tales Stickers</a></div> <script type="text/javascript" async src="https://tenor.com/embed.js"></script>'; // local gif file
         } else if (rollResult.total === 2) {
           resultText = '# **GOOD!!** (Rolled a 2 or equivalent)';
-          gifUrl = 'https://www.google.com/url?sa=i&url=https%3A%2F%2Ftenor.com%2Fview%2Fgood-blocktales-rating-roblox-pixel-gif-5262027714003291268&psig=AOvVaw3ofdfbffi5m3bUDucjhPs0&ust=1754868171490000&source=images&cd=vfe&opi=89978449&ved=0CBQQjRxqFwoTCNCdgNvv_o4DFQAAAAAdAAAAABAE'; // local gif file
+          gifUrl = '<div class="tenor-gif-embed" data-postid="4725610514004540515" data-share-method="host" data-aspect-ratio="2.13592" data-width="100%"><a href="https://tenor.com/view/block-tales-roblox-gif-4725610514004540515">Block Tales Roblox Sticker</a>from <a href="https://tenor.com/search/block+tales-stickers">Block Tales Stickers</a></div> <script type="text/javascript" async src="https://tenor.com/embed.js"></script>'; // local gif file
         } else {
           resultText = 'bleh... (Attack deflected or rolled a 1)';
-          gifUrl = 'https://www.google.com/url?sa=i&url=https%3A%2F%2Ftenor.com%2Fsearch%2Fbrain-fart-gifs&psig=AOvVaw2ttpJkUSuLfrZnJgHnUXFe&ust=1754868339686000&source=images&cd=vfe&opi=89978449&ved=0CBQQjRxqFwoTCLDqvY7w_o4DFQAAAAAdAAAAABAE'; // local gif file
+          gifUrl = '<div class="tenor-gif-embed" data-postid="25678781" data-share-method="host" data-aspect-ratio="1.77778" data-width="100%"><a href="https://tenor.com/view/snoring-snoring-aneurysm-brain-aneurysm-brain-aww-gif-25678781">Snoring Snoring Aneurysm GIF</a>from <a href="https://tenor.com/search/snoring-gifs">Snoring GIFs</a></div> <script type="text/javascript" async src="https://tenor.com/embed.js"></script>'; // local gif file
         }
 
         // Create embed with attack result
