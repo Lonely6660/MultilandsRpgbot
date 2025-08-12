@@ -1777,16 +1777,16 @@ client.on('interactionCreate', async interaction => {
 
         if (rollResult.total === rollResult.maxPossible) {
           resultText = '# **AMAZING!!!!!** (You did a perfect hit)';
-          gifUrl = '<div class="tenor-gif-embed" data-postid="9278811802888912655" data-share-method="host" data-aspect-ratio="1.66667" data-width="100%"><a href="https://tenor.com/view/block-tales-roblox-gif-9278811802888912655">Block Tales Roblox Sticker</a>from <a href="https://tenor.com/search/block+tales-stickers">Block Tales Stickers</a></div> <script type="text/javascript" async src="https://tenor.com/embed.js"></script>'; // local gif file
+          gifUrl = 'file:///L:/Multilands%20RPG/Amazing.gif'; // local gif file
         } else if (rollResult.total >= 3) {
           resultText = '# **GREAT!!!** (Rolled a 3 or equivalent)';
-          gifUrl = '<div class="tenor-gif-embed" data-postid="13934495841512716486" data-share-method="host" data-aspect-ratio="1.81818" data-width="100%"><a href="https://tenor.com/view/block-tales-roblox-gif-13934495841512716486">Block Tales Roblox Sticker</a>from <a href="https://tenor.com/search/block+tales-stickers">Block Tales Stickers</a></div> <script type="text/javascript" async src="https://tenor.com/embed.js"></script>'; // local gif file
+          gifUrl = 'file:///L:/Multilands%20RPG/great.gif'; // local gif file
         } else if (rollResult.total === 2) {
           resultText = '# **GOOD!!** (Rolled a 2 or equivalent)';
-          gifUrl = '<div class="tenor-gif-embed" data-postid="4725610514004540515" data-share-method="host" data-aspect-ratio="2.13592" data-width="100%"><a href="https://tenor.com/view/block-tales-roblox-gif-4725610514004540515">Block Tales Roblox Sticker</a>from <a href="https://tenor.com/search/block+tales-stickers">Block Tales Stickers</a></div> <script type="text/javascript" async src="https://tenor.com/embed.js"></script>'; // local gif file
+          gifUrl = 'file:///L:/Multilands%20RPG/good.gif'; // local gif file
         } else {
           resultText = 'bleh... (Attack deflected or rolled a 1)';
-          gifUrl = '<div class="tenor-gif-embed" data-postid="25678781" data-share-method="host" data-aspect-ratio="1.77778" data-width="100%"><a href="https://tenor.com/view/snoring-snoring-aneurysm-brain-aneurysm-brain-aww-gif-25678781">Snoring Snoring Aneurysm GIF</a>from <a href="https://tenor.com/search/snoring-gifs">Snoring GIFs</a></div> <script type="text/javascript" async src="https://tenor.com/embed.js"></script>'; // local gif file
+          gifUrl = 'file:///L:/Multilands%20RPG/bleh....gif'; // local gif file
         }
 
         // Create embed with attack result
