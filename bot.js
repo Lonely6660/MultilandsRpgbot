@@ -1837,16 +1837,16 @@ client.on('interactionCreate', async interaction => {
 
         if (rollResult.total === rollResult.maxPossible) {
           resultText = '# **AMAZING!!!!!** (You did a perfect hit)';
-          gifUrl = 'https://github.com/Lonely6660/MultilandsRpgbot/blob/main/reactions/Amazing.gif'; // local gif file
+          gifUrl = 'https://raw.githubusercontent.com/Lonely6660/MultilandsRpgbot/refs/heads/main/reactions/Amazing.gif'; // local gif file
         } else if (rollResult.total >= 3) {
           resultText = '# **GREAT!!!** (Rolled a 3 or equivalent)';
-          gifUrl = 'https://github.com/Lonely6660/MultilandsRpgbot/blob/main/reactions/great.gif'; // local gif file
+          gifUrl = 'https://raw.githubusercontent.com/Lonely6660/MultilandsRpgbot/refs/heads/main/reactions/great.gif'; // local gif file
         } else if (rollResult.total === 2) {
           resultText = '# **GOOD!!** (Rolled a 2 or equivalent)';
-          gifUrl = 'https://github.com/Lonely6660/MultilandsRpgbot/blob/main/reactions/good.gif'; // local gif file
+          gifUrl = 'https://raw.githubusercontent.com/Lonely6660/MultilandsRpgbot/refs/heads/main/reactions/good.gif'; // local gif file
         } else {
           resultText = 'bleh... (Attack deflected or rolled a 1)';
-          gifUrl = 'https://github.com/Lonely6660/MultilandsRpgbot/blob/main/reactions/bleh....gif'; // local gif file
+          gifUrl = 'https://raw.githubusercontent.com/Lonely6660/MultilandsRpgbot/refs/heads/main/reactions/bleh....gif'; // local gif file
         }
 
         // Create embed with attack result
