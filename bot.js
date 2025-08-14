@@ -1,5 +1,83 @@
 require('dotenv').config();
 
+// Universal URL validation function
+function validateUniversalURL(url) {
+    if (!url || url.trim() === '') return true; // Allow empty URLs
+    
+    const trimmedUrl = url.trim();
+    
+    // Allow various formats:
+    const allowedPatterns = [
+        /^https?:\/\//i,                    // Standard HTTP/HTTPS
+        /^ftp:\/\//i,                       // FTP
+        /^\/[\w\-./]*$/,                    // Local file paths starting with /
+        /^data:image\/[\w+.-]+;base64,/i,   // Data URLs
+        /^[\w\-]+\.[\w\-]+.*\.(gif|jpg|jpeg|png|webp|mp4|webm)$/i, // Direct file links
+        /^(tenor\.com|giphy\.com|imgur\.com|i\.imgur\.com|media\.discordapp\.net|cdn\.discordapp\.com|github\.com|raw\.githubusercontent\.com)/i, // Trusted domains
+        /^[\w\-]+\.[\w\-]+\.(gif|jpg|jpeg|png|webp|mp4|webm)$/i // Simple file names
+    ];
+    
+    // Check if URL matches any allowed pattern
+    for (const pattern of allowedPatterns) {
+        if (pattern.test(trimmedUrl)) {
+            return true;
+        }
+    }
+    
+    // Try to parse as standard URL
+    try {
+        new URL(trimmedUrl);
+        return true;
+    } catch {
+        // If no protocol provided, assume HTTPS
+        try {
+            new URL('https://' + trimmedUrl);
+            return true;
+        } catch {
+            return false;
+        }
+    }
+}
+
+// Universal URL validation function
+function validateUniversalURL(url) {
+    if (!url || url.trim() === '') return true; // Allow empty URLs
+    
+    const trimmedUrl = url.trim();
+    
+    // Allow various formats:
+    const allowedPatterns = [
+        /^https?:\/\//i,                    // Standard HTTP/HTTPS
+        /^ftp:\/\//i,                       // FTP
+        /^\/[\w\-./]*$/,                    // Local file paths starting with /
+        /^data:image\/[\w+.-]+;base64,/i,   // Data URLs
+        /^[\w\-]+\.[\w\-]+.*\.(gif|jpg|jpeg|png|webp|mp4|webm)$/i, // Direct file links
+        /^(tenor\.com|giphy\.com|imgur\.com|i\.imgur\.com|media\.discordapp\.net|cdn\.discordapp\.com|github\.com|raw\.githubusercontent\.com|i\.redd\.it|i\.gyazo\.com|i\.prntscr\.com)/i, // Trusted domains
+        /^[\w\-]+\.[\w\-]+\.(gif|jpg|jpeg|png|webp|mp4|webm)$/i // Simple file names
+    ];
+    
+    // Check if URL matches any allowed pattern
+    for (const pattern of allowedPatterns) {
+        if (pattern.test(trimmedUrl)) {
+            return true;
+        }
+    }
+    
+    // Try to parse as standard URL
+    try {
+        new URL(trimmedUrl);
+        return true;
+    } catch {
+        // If no protocol provided, assume HTTPS
+        try {
+            new URL('https://' + trimmedUrl);
+            return true;
+        } catch {
+            return false;
+        }
+    }
+}
+
 // --- START DEBUGGING LINES (KEEP THESE FOR NOW) ---
 console.log('--- Environment Variables Check ---');
 console.log('process.env.NEON_POSTGRES_URI:', process.env.NEON_POSTGRES_URI ? '***** (value present)' : 'UNDEFINED or EMPTY');
@@ -835,53 +913,36 @@ client.on('interactionCreate', async interaction => {
         // --- Defer the reply immediately to prevent "Unknown interaction" ---
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-        // Basic URL validation for avatar_url
-        try {
-            new URL(avatarURL);
-        } catch (e) {
-            // Use editReply as the interaction is already deferred
-            return interaction.editReply({ content: '❌ Invalid URL for avatar. Please provide a valid image URL.' });
-        }
-        // Basic URL validation for appearance_url if provided
-        if (appearanceURL) {
-            try {
-                new URL(appearanceURL);
-            } catch (e) {
-                // Use editReply as the interaction is already deferred
-                return interaction.editReply({ content: '❌ Invalid URL for appearance. Please provide a valid image URL.' });
-            }
-        }
+try {
+    // Check if character already exists for this user
+    const checkQuery = 'SELECT * FROM characters WHERE user_id = $1 AND name = $2;';
+    const checkResult = await pgClient.query(checkQuery, [userId, name]);
 
-        try {
-            // Check if character already exists for this user
-            const checkQuery = 'SELECT * FROM characters WHERE user_id = $1 AND name = $2;';
-            const checkResult = await pgClient.query(checkQuery, [userId, name]);
+    if (checkResult.rows.length > 0) {
+      // Use editReply as the interaction is already deferred
+      return interaction.editReply({ content: `❌ You already have a character named "${name}".` });
+    }
 
-            if (checkResult.rows.length > 0) {
-              // Use editReply as the interaction is already deferred
-              return interaction.editReply({ content: `❌ You already have a character named "${name}".` });
-            }
+    // Insert new character with all new fields, including sanity descriptions and undefined stats
+    const insertQuery = `
+      INSERT INTO characters (user_id, name, avatar_url, gender, age, species, occupation, appearance_url, sanity_increase_desc, sanity_decrease_desc, damage, health_max, agility, speed, stamina, sanity)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING id, sanity_max; -- Return the character ID and max sanity
+    `;
+    const insertResult = await pgClient.query(insertQuery, [userId, name, avatarURL, gender, age, species, occupation, appearanceURL, sanityIncrease, sanityDecrease, damage, health_max, agility, speed, stamina, sanity]);
+    const newCharacterId = insertResult.rows[0].id;
 
-            // Insert new character with all new fields, including sanity descriptions and undefined stats
-            const insertQuery = `
-              INSERT INTO characters (user_id, name, avatar_url, gender, age, species, occupation, appearance_url, sanity_increase_desc, sanity_decrease_desc, damage, health_max, agility, speed, stamina, sanity)
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING id, sanity_max; -- Return the character ID and max sanity
-            `;
-            const insertResult = await pgClient.query(insertQuery, [userId, name, avatarURL, gender, age, species, occupation, appearanceURL, sanityIncrease, sanityDecrease, damage, health_max, agility, speed, stamina, sanity]);
-            const newCharacterId = insertResult.rows[0].id;
+    // Final reply uses editReply as the interaction is already deferred
+    await interaction.editReply({ content: `✅ Character "${name}" created successfully!` });
 
-            // Final reply uses editReply as the interaction is already deferred
-            await interaction.editReply({ content: `✅ Character "${name}" created successfully!` });
-
-        } catch (dbError) {
-            console.error('Error creating character in DB:', dbError);
-            // Ensure you use editReply if deferred/replied, otherwise reply
-            if (interaction.deferred || interaction.replied) {
-                return interaction.editReply({ content: '❌ An error occurred while saving your character.' });
-            } else {
-                return interaction.reply({ content: '❌ An error occurred while saving your character.', flags: MessageFlags.Ephemeral });
-            }
-        }
+} catch (dbError) {
+    console.error('Error creating character in DB:', dbError);
+    // Ensure you use editReply if deferred/replied, otherwise reply
+    if (interaction.deferred || interaction.replied) {
+        return interaction.editReply({ content: '❌ An error occurred while saving your character.' });
+    } else {
+        return interaction.reply({ content: '❌ An error occurred while saving your character.', flags: MessageFlags.Ephemeral });
+    }
+}
       } else if (subcommand === 'edit') { // 'edit' subcommand handler
         const characterName = options.getString('name');
         const avatarURL = options.getString('avatar_url');
@@ -1631,7 +1692,7 @@ Sanity: ${character.sanity_current || 'N/A'}/${character.sanity_max || 'N/A'}
         }
     }
 
-  } catch (error) {
+} catch (error) {
     console.error(`Error executing ${commandName}:`, error);
     if (interaction.replied || interaction.deferred) {
         await interaction.followUp({ content: '❌ An unexpected error occurred while executing this command.', flags: MessageFlags.Ephemeral });
@@ -1640,7 +1701,6 @@ Sanity: ${character.sanity_current || 'N/A'}/${character.sanity_max || 'N/A'}
     }
   }
 });
-
     // Add /attack command handler
 client.on('interactionCreate', async interaction => {
   if (!interaction.isCommand()) return;
@@ -1777,16 +1837,16 @@ client.on('interactionCreate', async interaction => {
 
         if (rollResult.total === rollResult.maxPossible) {
           resultText = '# **AMAZING!!!!!** (You did a perfect hit)';
-          gifUrl = 'file:///L:/Multilands%20RPG/Amazing.gif'; // local gif file
+          gifUrl = 'https://tenor.com/pt-BR/view/block-tales-roblox-gif-9278811802888912655'; // local gif file
         } else if (rollResult.total >= 3) {
           resultText = '# **GREAT!!!** (Rolled a 3 or equivalent)';
-          gifUrl = 'file:///L:/Multilands%20RPG/great.gif'; // local gif file
+          gifUrl = 'https://tenor.com/pt-BR/view/block-tales-roblox-gif-13934495841512716486'; // local gif file
         } else if (rollResult.total === 2) {
           resultText = '# **GOOD!!** (Rolled a 2 or equivalent)';
-          gifUrl = 'file:///L:/Multilands%20RPG/good.gif'; // local gif file
+          gifUrl = 'https://tenor.com/pt-BR/view/block-tales-roblox-gif-4725610514004540515'; // local gif file
         } else {
           resultText = 'bleh... (Attack deflected or rolled a 1)';
-          gifUrl = 'file:///L:/Multilands%20RPG/bleh....gif'; // local gif file
+          gifUrl = 'https://tenor.com/pt-BR/view/snoring-snoring-aneurysm-brain-aneurysm-brain-aww-gif-25678781'; // local gif file
         }
 
         // Create embed with attack result
