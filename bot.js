@@ -1,5 +1,44 @@
 require('dotenv').config();
 
+// Universal URL validation function
+function validateUniversalURL(url) {
+    if (!url || url.trim() === '') return true; // Allow empty URLs
+    
+    const trimmedUrl = url.trim();
+    
+    // Allow various formats:
+    const allowedPatterns = [
+        /^https?:\/\//i,                    // Standard HTTP/HTTPS
+        /^ftp:\/\//i,                       // FTP
+        /^\/[\w\-./]*$/,                    // Local file paths starting with /
+        /^data:image\/[\w+.-]+;base64,/i,   // Data URLs
+        /^[\w\-]+\.[\w\-]+.*\.(gif|jpg|jpeg|png|webp|mp4|webm)$/i, // Direct file links
+        /^(tenor\.com|giphy\.com|imgur\.com|i\.imgur\.com|media\.discordapp\.net|cdn\.discordapp\.com|github\.com|raw\.githubusercontent\.com|i\.redd\.it|i\.gyazo\.com|i\.prntscr\.com)/i, // Trusted domains
+        /^[\w\-]+\.[\w\-]+\.(gif|jpg|jpeg|png|webp|mp4|webm)$/i // Simple file names
+    ];
+    
+    // Check if URL matches any allowed pattern
+    for (const pattern of allowedPatterns) {
+        if (pattern.test(trimmedUrl)) {
+            return true;
+        }
+    }
+    
+    // Try to parse as URL
+    try {
+        new URL(trimmedUrl);
+        return true;
+    } catch {
+        // If no protocol provided, assume HTTPS
+        try {
+            new URL('https://' + trimmedUrl);
+            return true;
+        } catch {
+            return false;
+        }
+    }
+}
+
 // --- START DEBUGGING LINES (KEEP THESE FOR NOW) ---
 console.log('--- Environment Variables Check ---');
 console.log('process.env.NEON_POSTGRES_URI:', process.env.NEON_POSTGRES_URI ? '***** (value present)' : 'UNDEFINED or EMPTY');
@@ -410,7 +449,7 @@ pgClient.connect()
 
     // --- NEW: Ensure 'battle_participants' table ---
     const createBattleParticipantsTableQuery = `
-      CREATE TABLE IF NOT EXISTS battle_participants (
+      CREATE table IF NOT EXISTS battle_participants (
         id SERIAL PRIMARY KEY,
         battle_id INTEGER REFERENCES battles(id) ON DELETE CASCADE,
         character_id INTEGER REFERENCES characters(id) ON DELETE CASCADE, -- NULL for NPCs
@@ -424,9 +463,18 @@ pgClient.connect()
     await pgClient.query(createBattleParticipantsTableQuery);
     console.log('📝 "battle_participants" table ensured.');
 
-
-  })
-  .catch(err => console.error('❌ PostgreSQL Connection Error:', err));
+    // --- NEW: Ensure 'user_rating_gifs' table ---
+    const createUserRatingGifsTableQuery = `
+      CREATE TABLE IF NOT EXISTS user_rating_gifs (
+        id SERIAL PRIMARY KEY,
+        user_id VARCHAR(255) NOT NULL,
+        rating VARCHAR(20) NOT NULL,
+        gif_url TEXT NOT NULL,
+        UNIQUE(user_id, rating)
+      );
+    `;
+    await pgClient.query(createUserRatingGifsTableQuery);
+    console.log('📝 "user_rating_gifs" table ensured.');
 
 
 // Command Registration
@@ -587,17 +635,8 @@ const commands = [
         .addStringOption(option =>
           option.setName('effect_description')
             .setDescription('A description of your attack\'s effect.')
-            .setRequired(false)))
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('use')
-        .setDescription('Use one of your attacks.')
-        .addStringOption(option =>
-          option.setName('attack_name')
-            .setDescription('The name of the attack to use.')
-            .setRequired(false)
-            .setAutocomplete(true))),
-
+            .setRequired(false))),
+  // Add the rp command as a separate SlashCommandBuilder in the array
   new SlashCommandBuilder()
     .setName('rp')
     .setDescription('Send an in-character message.')
@@ -610,13 +649,7 @@ const commands = [
         .setDescription('The channel to send the message in (defaults to current).')
         .addChannelTypes(0)), // 0 for Text Channels
 
-  new SlashCommandBuilder()
-    .setName('roll')
-    .setDescription('Rolls dice with a specified notation (e.g., 1d4, 2d6+3).')
-    .addStringOption(option =>
-      option.setName('dice')
-        .setDescription('The dice notation (e.g., 1d4, 2d6+3).')
-        .setRequired(true)),
+  
 
   // --- /item command for managing item definitions ---
   new SlashCommandBuilder()
@@ -717,7 +750,7 @@ const commands = [
             .setDescription('The quantity of the item to add (default is 1).')
             .setRequired(false))),
 
-  // --- NEW: /battle command for initiating and managing battles ---
+  // --- NEW: Unified /battle command with all battle-related subcommands ---
   new SlashCommandBuilder()
     .setName('battle')
     .setDescription('Initiate and manage combat encounters.')
@@ -736,7 +769,82 @@ const commands = [
     .addSubcommand(subcommand =>
       subcommand
         .setName('end')
-        .setDescription('End the current battle in this channel (admin only).')) // Admin-only initially
+        .setDescription('End the current battle in this channel (admin only).'))
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('attack')
+        .setDescription('Perform an attack in the current battle.')
+        .addStringOption(option =>
+          option.setName('attack_name')
+            .setDescription('The name of the attack to use (optional, defaults to first available).')
+            .setRequired(false)))
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('action')
+        .setDescription('Perform battle actions like Runaway, Defend, Focus, or custom actions.')
+        .addStringOption(option =>
+          option.setName('action')
+            .setDescription('The action to perform')
+            .setRequired(true)
+            .addChoices(
+              { name: 'Runaway', value: 'runaway' },
+              { name: 'Defend', value: 'defend' },
+              { name: 'Focus', value: 'focus' },
+              { name: 'Item Action', value: 'item' }
+            ))
+        .addStringOption(option =>
+          option.setName('custom_action')
+            .setDescription('Custom action description (for non-default actions)')
+            .setRequired(false))
+        .addStringOption(option =>
+          option.setName('dice')
+            .setDescription('Dice notation for custom actions (e.g., 1d4, 2d6+3)')
+            .setRequired(false))),
+
+  // --- NEW: /set rating gifs command ---
+  new SlashCommandBuilder()
+    .setName('set-rating-gifs')
+    .setDescription('Manage custom rating gifs for your character')
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('set')
+        .setDescription('Set custom rating gifs for your character')
+        .addStringOption(option =>
+          option.setName('rating')
+            .setDescription('The rating level')
+            .setRequired(true)
+            .addChoices(
+              { name: 'Perfect', value: 'perfect' },
+              { name: 'Great', value: 'great' },
+              { name: 'Good', value: 'good' },
+              { name: 'Deflected', value: 'deflected' }
+            ))
+        .addStringOption(option =>
+          option.setName('gif_url')
+            .setDescription('The URL of the gif for this rating')
+            .setRequired(true)))
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('list')
+        .setDescription('List your custom rating gifs'))
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('reset')
+        .setDescription('Reset all rating gifs to defaults'))
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('default')
+        .setDescription('Reset specific rating to default')
+        .addStringOption(option =>
+          option.setName('rating')
+            .setDescription('The rating to reset to default')
+            .setRequired(true)
+            .addChoices(
+              { name: 'Perfect', value: 'perfect' },
+              { name: 'Great', value: 'great' },
+              { name: 'Good', value: 'good' },
+              { name: 'Deflected', value: 'deflected' }
+            )))
 ];
 
 // .map(command => command.toJSON(); is called after the array of commands.
@@ -835,53 +943,36 @@ client.on('interactionCreate', async interaction => {
         // --- Defer the reply immediately to prevent "Unknown interaction" ---
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-        // Basic URL validation for avatar_url
-        try {
-            new URL(avatarURL);
-        } catch (e) {
-            // Use editReply as the interaction is already deferred
-            return interaction.editReply({ content: '❌ Invalid URL for avatar. Please provide a valid image URL.' });
-        }
-        // Basic URL validation for appearance_url if provided
-        if (appearanceURL) {
-            try {
-                new URL(appearanceURL);
-            } catch (e) {
-                // Use editReply as the interaction is already deferred
-                return interaction.editReply({ content: '❌ Invalid URL for appearance. Please provide a valid image URL.' });
-            }
-        }
+try {
+    // Check if character already exists for this user
+    const checkQuery = 'SELECT * FROM characters WHERE user_id = $1 AND name = $2;';
+    const checkResult = await pgClient.query(checkQuery, [userId, name]);
 
-        try {
-            // Check if character already exists for this user
-            const checkQuery = 'SELECT * FROM characters WHERE user_id = $1 AND name = $2;';
-            const checkResult = await pgClient.query(checkQuery, [userId, name]);
+    if (checkResult.rows.length > 0) {
+      // Use editReply as the interaction is already deferred
+      return interaction.editReply({ content: `❌ You already have a character named "${name}".` });
+    }
 
-            if (checkResult.rows.length > 0) {
-              // Use editReply as the interaction is already deferred
-              return interaction.editReply({ content: `❌ You already have a character named "${name}".` });
-            }
+    // Insert new character with all new fields, including sanity descriptions and undefined stats
+    const insertQuery = `
+      INSERT INTO characters (user_id, name, avatar_url, gender, age, species, occupation, appearance_url, sanity_increase_desc, sanity_decrease_desc, damage, health_max, agility, speed, stamina, sanity)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING id, sanity_max; -- Return the character ID and max sanity
+    `;
+    const insertResult = await pgClient.query(insertQuery, [userId, name, avatarURL, gender, age, species, occupation, appearanceURL, sanityIncrease, sanityDecrease, damage, health_max, agility, speed, stamina, sanity]);
+    const newCharacterId = insertResult.rows[0].id;
 
-            // Insert new character with all new fields, including sanity descriptions and undefined stats
-            const insertQuery = `
-              INSERT INTO characters (user_id, name, avatar_url, gender, age, species, occupation, appearance_url, sanity_increase_desc, sanity_decrease_desc, damage, health_max, agility, speed, stamina, sanity)
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING id, sanity_max; -- Return the character ID and max sanity
-            `;
-            const insertResult = await pgClient.query(insertQuery, [userId, name, avatarURL, gender, age, species, occupation, appearanceURL, sanityIncrease, sanityDecrease, damage, health_max, agility, speed, stamina, sanity]);
-            const newCharacterId = insertResult.rows[0].id;
+    // Final reply uses editReply as the interaction is already deferred
+    await interaction.editReply({ content: `✅ Character "${name}" created successfully!` });
 
-            // Final reply uses editReply as the interaction is already deferred
-            await interaction.editReply({ content: `✅ Character "${name}" created successfully!` });
-
-        } catch (dbError) {
-            console.error('Error creating character in DB:', dbError);
-            // Ensure you use editReply if deferred/replied, otherwise reply
-            if (interaction.deferred || interaction.replied) {
-                return interaction.editReply({ content: '❌ An error occurred while saving your character.' });
-            } else {
-                return interaction.reply({ content: '❌ An error occurred while saving your character.', flags: MessageFlags.Ephemeral });
-            }
-        }
+} catch (dbError) {
+    console.error('Error creating character in DB:', dbError);
+    // Ensure you use editReply if deferred/replied, otherwise reply
+    if (interaction.deferred || interaction.replied) {
+        return interaction.editReply({ content: '❌ An error occurred while saving your character.' });
+    } else {
+        return interaction.reply({ content: '❌ An error occurred while saving your character.', flags: MessageFlags.Ephemeral });
+    }
+}
       } else if (subcommand === 'edit') { // 'edit' subcommand handler
         const characterName = options.getString('name');
         const avatarURL = options.getString('avatar_url');
@@ -1631,7 +1722,7 @@ Sanity: ${character.sanity_current || 'N/A'}/${character.sanity_max || 'N/A'}
         }
     }
 
-  } catch (error) {
+} catch (error) {
     console.error(`Error executing ${commandName}:`, error);
     if (interaction.replied || interaction.deferred) {
         await interaction.followUp({ content: '❌ An unexpected error occurred while executing this command.', flags: MessageFlags.Ephemeral });
@@ -1640,7 +1731,6 @@ Sanity: ${character.sanity_current || 'N/A'}/${character.sanity_max || 'N/A'}
     }
   }
 });
-
     // Add /attack command handler
 client.on('interactionCreate', async interaction => {
   if (!interaction.isCommand()) return;
@@ -1776,18 +1866,18 @@ client.on('interactionCreate', async interaction => {
         let gifUrl = '';
 
         if (rollResult.total === rollResult.maxPossible) {
-          resultText = '# **AMAZING!!!!!** (You did a perfect hit)';
-          gifUrl = 'file:///L:/Multilands%20RPG/Amazing.gif'; // local gif file
-        } else if (rollResult.total >= 3) {
-          resultText = '# **GREAT!!!** (Rolled a 3 or equivalent)';
-          gifUrl = 'file:///L:/Multilands%20RPG/great.gif'; // local gif file
-        } else if (rollResult.total === 2) {
-          resultText = '# **GOOD!!** (Rolled a 2 or equivalent)';
-          gifUrl = 'file:///L:/Multilands%20RPG/good.gif'; // local gif file
-        } else {
-          resultText = 'bleh... (Attack deflected or rolled a 1)';
-          gifUrl = 'file:///L:/Multilands%20RPG/bleh....gif'; // local gif file
-        }
+  resultText = '# **AMAZING!!!!!** (You did a perfect hit)';
+  gifUrl = await getUserRatingGif(userId, 'amazing');
+} else if (rollResult.total >= 3) {
+  resultText = '# **GREAT!!!** (Rolled a 3 or equivalent)';
+  gifUrl = await getUserRatingGif(userId, 'great');
+} else if (rollResult.total === 2) {
+  resultText = '# **GOOD!!** (Rolled a 2 or equivalent)';
+  gifUrl = await getUserRatingGif(userId, 'good');
+} else {
+  resultText = 'bleh... (Attack deflected or rolled a 1)';
+  gifUrl = await getUserRatingGif(userId, 'bleh');
+}
 
         // Create embed with attack result
         const embed = new EmbedBuilder()
@@ -1849,8 +1939,6 @@ client.on('messageCreate', async message => {
   }
 });
 
-
-
 // Login
 client.login(process.env.DISCORD_TOKEN)
-  .catch(err => console.error('❌ Login failed:', err));
+  .catch(err => console.error('❌ Login failed:', err));})
