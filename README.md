@@ -92,7 +92,7 @@ A comprehensive Discord bot for role-playing games with character management, ba
    ```bash
    node bot.js
    ```
-
+5:Before dont forget to add a .gitignore file with your sensitive data!
 ### Database Setup
 The bot automatically creates all necessary tables on startup:
 - `characters` - Character data
