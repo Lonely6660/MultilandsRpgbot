@@ -30,3 +30,4 @@ async function getUserRatingGif(userId, rating, pgClient) {
 }
 
 module.exports = { getUserRatingGif };
+
