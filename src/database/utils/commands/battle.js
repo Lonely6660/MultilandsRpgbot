@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { rollDice, calculateDamageDice } = require('../../utils/dice');
-const { getUserRatingGif } = require('../../utils/gifs');
+const { rollDice, calculateDamageDice } = require('../utils/dice');
+const { getUserRatingGif } = require('../utils/gifs');
 
 // New unified battle command
 const battleCommand = new SlashCommandBuilder()
