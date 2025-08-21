@@ -16,3 +16,17 @@ async function getUserRatingGif(userId, rating, pgClient) {
     
     // Return default gifs if no custom ones found
     const defaultGifs = {
+      'amazing': 'https://i.imgur.com/exampleAmazing.gif',
+      'great': 'https://i.imgur.com/exampleGreat.gif',
+      'good': 'https://i.imgur.com/exampleGood.gif',
+      'deflected': 'https://i.imgur.com/exampleDeflected.gif'
+    };
+    
+    return defaultGifs[rating] || 'https://i.imgur.com/exampleDefault.gif';
+  } catch (error) {
+    console.error('Error getting user rating gif:', error);
+    return 'https://i.imgur.com/exampleDefault.gif';
+  }
+}
+
+module.exports = { getUserRatingGif };
