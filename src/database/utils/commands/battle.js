@@ -386,3 +386,4 @@ class BattleHandler {
 }
 
 module.exports = { battleCommand, BattleHandler };
+
